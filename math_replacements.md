@@ -116,14 +116,55 @@ they match whether or not the LaTeX command survived earlier passes.
 | `\Psi` | capital psi |
 | `\Omega` | omega |
 
+### Unicode Greek letters (arXiv feed delivers these pre-converted)
+
+| Match | Spoken |
+|-------|--------|
+| `α` | alpha |
+| `β` | beta |
+| `γ` | gamma |
+| `δ` | delta |
+| `ε` | epsilon |
+| `ζ` | zeta |
+| `η` | eta |
+| `θ` | theta |
+| `ι` | iota |
+| `κ` | kappa |
+| `λ` | lambda |
+| `μ` | mu |
+| `ν` | nu |
+| `ξ` | xi |
+| `π` | pi |
+| `ρ` | rho |
+| `σ` | sigma |
+| `τ` | tau |
+| `υ` | upsilon |
+| `φ` | phi |
+| `χ` | chi |
+| `ψ` | psi |
+| `ω` | omega |
+| `Γ` | capital gamma |
+| `Δ` | delta |
+| `Θ` | capital theta |
+| `Λ` | lambda |
+| `Ξ` | capital xi |
+| `Π` | capital pi |
+| `Σ` | capital sigma |
+| `Υ` | capital upsilon |
+| `Φ` | capital phi |
+| `Ψ` | capital psi |
+| `Ω` | omega |
+
 ### Comparison, set, and logic operators
 
 | Match | Spoken |
 |-------|--------|
 | `\geq` | ` greater than or equal to ` |
 | `\geqslant` | ` greater than or equal to ` |
+| `\gtrsim` | ` greater than or approximately ` |
 | `\leq` | ` less than or equal to ` |
 | `\leqslant` | ` less than or equal to ` |
+| `\lesssim` | ` less than or approximately ` |
 | `\gg` | ` much greater than ` |
 | `\ll` | ` much less than ` |
 | `\neq` | ` not equal to ` |
@@ -268,6 +309,12 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\\cos\s*\(([^()]+)\)` | the cosine of \1 | `\cos(z)` -> the cosine of z |
 | `\\tan\s*\(([^()]+)\)` | the tangent of \1 | `\tan(y)` -> the tangent of y |
 | `\\cot\s*\(([^()]+)\)` | the cotangent of \1 | `\cot(x)` -> the cotangent of x |
+| `\\log\b` | log | bare `\log` without parens |
+| `\\ln\b` | log | bare `\ln` without parens |
+| `\\exp\b` | exp | bare `\exp` without parens |
+| `\\sin\b` | sin | bare `\sin` without parens |
+| `\\cos\b` | cos | bare `\cos` without parens |
+| `\\tan\b` | tan | bare `\tan` without parens |
 
 ### Units with exponents (cubed/squared first, then bare; word boundaries)
 
@@ -348,6 +395,8 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `(\d+(?:\.\d+)?)\^(-?\w+)` | \1 to the \2 | `1.8^2` -> 1.8 to the 2 |
 | `([A-Za-z])_\{([^{}]+)\}` | \1 sub \2 | `x_{i,j}` -> x sub i,j |
 | `([A-Za-z])_([A-Za-z0-9])` | \1 sub \2 | `x_i` -> x sub i |
+| `\)_\{([^{}]+)\}` | ) sub \1 | `)_{C}` -> ) sub C |
+| `\)_([A-Za-z0-9])` | ) sub \1 | `)_C` -> ) sub C |
 | `_\{([^{}]+)\}` | sub \1 | `_{i,j}` -> sub i,j (no leading letter) |
 
 ### Symbol cleanup
@@ -360,4 +409,5 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `([A-Za-z0-9])\s*=\s*([A-Za-z0-9])` | \1 equals \2 | `n = 3` -> n equals 3 |
 | `\\,` |  | `\,` (thin space) -> removed |
 | `\\;` |  | `\;` -> removed |
+| `\^\*` | ` star` | `A^*` -> A star (e.g. Sgr A*) |
 | `\^` | ` to the power of ` | leftover `^` -> to the power of |
