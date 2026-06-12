@@ -81,12 +81,15 @@ jobs:
 
       # Cache the pulled model. Keyed on the model name so a model change busts
       # the cache automatically. We restore/save OLLAMA_MODELS (set above).
+      # The `-v2` suffix lets us manually bust the cache: a cancelled/partial
+      # earlier run can save an empty OLLAMA_MODELS dir, which then produces a
+      # cache *hit* with no model. Bump this suffix to discard a poisoned cache.
       - name: Cache ollama model
         id: ollama-cache
         uses: actions/cache@v4
         with:
           path: ${{ env.OLLAMA_MODELS }}
-          key: ollama-model-${{ steps.model.outputs.name }}
+          key: ollama-model-${{ steps.model.outputs.name }}-v2
 
       - name: Start ollama server
         run: |
@@ -106,11 +109,20 @@ jobs:
           cat ollama.log >&2 || true
           exit 1
 
-      # Pull only on a cache miss. On a hit the model is already on disk under
-      # OLLAMA_MODELS, so we skip the (slow) download entirely.
-      - name: Pull ollama model (cache miss only)
-        if: steps.ollama-cache.outputs.cache-hit != 'true'
-        run: ollama pull "${{ steps.model.outputs.name }}"
+      # Ensure the model is actually present, regardless of cache state. A cache
+      # hit normally means the model is already on disk under OLLAMA_MODELS, so
+      # we skip the slow download. But if the cache was saved empty/partial (a
+      # cancelled or failed earlier run), the hit would otherwise leave ollama
+      # with no model — so we verify against `ollama list` and pull if missing.
+      - name: Ensure ollama model is present
+        run: |
+          MODEL="${{ steps.model.outputs.name }}"
+          if ollama list | awk 'NR>1 {print $1}' | grep -qx "$MODEL"; then
+            echo "Model $MODEL already present (cache hit); skipping pull."
+          else
+            echo "Model $MODEL not present; pulling."
+            ollama pull "$MODEL"
+          fi
 
       - name: Run arxaudio pipeline
         env:
