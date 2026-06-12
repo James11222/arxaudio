@@ -12,3 +12,5 @@ output/
 # local env
 .venv/
 .env
+
+CLAUDE.md
