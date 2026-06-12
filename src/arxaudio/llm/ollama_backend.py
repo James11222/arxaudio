@@ -33,7 +33,7 @@ DEFAULT_TIMEOUT = 120.0  # seconds; tiny models on CI can still be slow to load
 # model emit garbage (e.g. discarding every paper). 4096 holds preferences + one
 # abstract with headroom; it costs a little KV-cache memory but does NOT change
 # how many prompt tokens are actually evaluated, so inference speed is unaffected.
-DEFAULT_NUM_CTX = 4096
+DEFAULT_NUM_CTX = 8192 
 
 
 class OllamaBackend(LLMBackend):
