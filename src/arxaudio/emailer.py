@@ -125,10 +125,11 @@ def _build_body(n_papers: int, paper_titles: list[str]) -> str:
         lines.append(f"  {i:2d}. {title}")
     lines += [
         "",
-        "The MP3 file is attached.  Happy listening!",
+        "The MP3 file is attached.  Happy* listening!",
         "",
         "--",
         "Sent by arxaudio  <https://github.com/jsunseri/arxaudio>",
+        "*: Not happy listening? Open an issue on Github!",
     ]
     return "\n".join(lines)
 
