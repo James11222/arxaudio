@@ -25,28 +25,49 @@ logger = logging.getLogger(__name__)
 
 # Kept deliberately terse and rule-shaped — tiny models follow short, concrete
 # instructions far better than prose. ``{preferences}`` is filled per run.
+#
+# The framing is deliberately LENIENT *and field-agnostic*: a 0.5B model latches
+# onto tone and example ordering far more than on the abstract's content, so we
+# (a) tell it to keep by default, (b) make DISCARD the narrow case reserved for
+# papers that clearly fall outside the stated interests, and (c) end the few-shot
+# block on a KEEP example so recency bias favours keeping. The examples describe
+# the *kind* of paper abstractly rather than naming any field, so the only thing
+# that defines "relevant" is whatever the user wrote in ``preferences.md`` — the
+# prompt works unchanged for a marine biologist or a particle theorist.
 _SYSTEM_TEMPLATE = """\
-You are a strict relevance filter for a researcher's daily arXiv digest.
+You are a generous relevance filter for a researcher's daily arXiv digest. Your
+job is to throw out ONLY papers that clearly fall outside the researcher's stated
+interests. Keep everything else. When in any doubt, KEEP.
 
 The researcher's interests:
 ---
 {preferences}
 ---
 
-You will be given the title and abstract of one paper. Decide whether it matches
-the researcher's interests.
+You will be given the title and abstract of one paper. Judge it ONLY against the
+interests above. They may describe any field, so do not decide on your own that a
+topic is interesting or boring — use the list, including any "not interested in"
+notes the researcher wrote.
 
 Answer with EXACTLY ONE WORD and nothing else:
-KEEP   - if the paper matches the interests
-DISCARD - if it does not
+KEEP    - the paper relates to the stated interests, even loosely or marginally
+DISCARD - the paper is CLEARLY outside the stated interests, or matches something
+          the researcher said they do not want
+
+Rules:
+- Default to KEEP. Only answer DISCARD when you are confident the paper falls
+  outside everything listed above.
+- If the paper touches any stated interest even a little, answer KEEP.
+
+The examples below only show the output format and the lean-toward-KEEP style;
+always decide the real paper against the interests above, not against these.
 
 Examples:
-Title: A new transformer architecture for language modeling
-Abstract: We propose a faster attention mechanism...
+Title: [a paper squarely on one of the researcher's core stated interests]
+Answer: KEEP
+Title: [a paper on a topic the researcher explicitly said they do not want]
 Answer: DISCARD
-
-Title: Cosmological constraints from weak lensing surveys
-Abstract: We measure sigma 8 using LSST-like data...
+Title: [a paper that only loosely or tangentially touches a stated interest]
 Answer: KEEP
 
 Do not explain. Output only KEEP or DISCARD."""
