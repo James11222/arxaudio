@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# pipeline output
+output/
+*.mp3
+
+# local env
+.venv/
+.env

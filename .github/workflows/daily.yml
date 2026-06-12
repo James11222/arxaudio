@@ -1,0 +1,141 @@
+name: arxaudio daily digest
+
+# -----------------------------------------------------------------------------
+# Runs the full arxaudio pipeline once a day: fetch new arXiv papers, filter them
+# against preferences.md with a tiny local LLM (ollama), clean math notation for
+# speech, synthesize one MP3, and email it.
+#
+# The model name is read from config.py at runtime (single source of truth) so
+# the cache key and `ollama pull` always agree with what the pipeline will use.
+# -----------------------------------------------------------------------------
+
+on:
+  schedule:
+    # 10:30 UTC, Monday–Friday. arXiv announces new papers Mon–Fri (around
+    # 00:00 UTC / 20:00 ET the previous evening), so a morning-UTC run picks up
+    # the freshest batch. Adjust the cron to your own timezone/taste:
+    #   https://crontab.guru/  — fields are: minute hour day-of-month month day-of-week
+    - cron: "30 10 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      lookback_hours:
+        description: "How many hours back to fetch (overrides config.py LOOKBACK_HOURS)."
+        required: false
+        type: string
+        default: ""
+      skip_email:
+        description: "Build the audio but do not send the email."
+        required: false
+        type: boolean
+        default: false
+
+# Never let two daily runs overlap (they'd fight over the same ollama port and
+# artifact name). A newer run cancels an in-flight older one.
+concurrency:
+  group: arxaudio-daily
+  cancel-in-progress: true
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      # Pin where ollama stores models so caching is deterministic regardless of
+      # which user starts `ollama serve`. We start the server ourselves as the
+      # runner user below, and point it at this directory explicitly.
+      OLLAMA_MODELS: ${{ github.workspace }}/.ollama-models
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install arxaudio
+        run: pip install -e .
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      # Single source of truth: read OLLAMA_MODEL straight out of config.py so the
+      # cache key and the pull below can never drift from the pipeline's config.
+      - name: Read model name from config.py
+        id: model
+        run: |
+          MODEL=$(python -c "import importlib.util,sys; \
+            spec=importlib.util.spec_from_file_location('cfg','config.py'); \
+            m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); \
+            print(getattr(m,'OLLAMA_MODEL','qwen2.5:0.5b'))")
+          echo "name=$MODEL" >> "$GITHUB_OUTPUT"
+          echo "Configured ollama model: $MODEL"
+
+      - name: Install ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      # Cache the pulled model. Keyed on the model name so a model change busts
+      # the cache automatically. We restore/save OLLAMA_MODELS (set above).
+      - name: Cache ollama model
+        id: ollama-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OLLAMA_MODELS }}
+          key: ollama-model-${{ steps.model.outputs.name }}
+
+      - name: Start ollama server
+        run: |
+          mkdir -p "$OLLAMA_MODELS"
+          # Start the server as the runner user (NOT the systemd `ollama` user
+          # created by the installer) so it honours OLLAMA_MODELS above.
+          ollama serve > ollama.log 2>&1 &
+          # Wait until the REST API answers (or fail fast after ~30s).
+          for i in $(seq 1 30); do
+            if curl -fs --max-time 2 http://localhost:11434/ >/dev/null 2>&1; then
+              echo "ollama is up."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ollama did not become ready in time." >&2
+          cat ollama.log >&2 || true
+          exit 1
+
+      # Pull only on a cache miss. On a hit the model is already on disk under
+      # OLLAMA_MODELS, so we skip the (slow) download entirely.
+      - name: Pull ollama model (cache miss only)
+        if: steps.ollama-cache.outputs.cache-hit != 'true'
+        run: ollama pull "${{ steps.model.outputs.name }}"
+
+      - name: Run arxaudio pipeline
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          ARGS=()
+          # workflow_dispatch optional inputs → CLI flags.
+          if [ -n "${{ github.event.inputs.lookback_hours }}" ]; then
+            ARGS+=(--lookback-hours "${{ github.event.inputs.lookback_hours }}")
+          fi
+          if [ "${{ github.event.inputs.skip_email }}" = "true" ]; then
+            ARGS+=(--no-email)
+          fi
+          python -m arxaudio.pipeline "${ARGS[@]}"
+
+      - name: Upload MP3 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arxaudio-digest
+          path: output/*.mp3
+          retention-days: 14
+          # Zero-paper days produce no MP3; that's normal, don't fail the upload.
+          if-no-files-found: ignore
