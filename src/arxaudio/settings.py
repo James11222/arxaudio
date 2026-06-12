@@ -36,8 +36,7 @@ _DEFAULTS: dict[str, object] = {
     "TTS_VOICE": "en-US-AndrewNeural",
     "MAX_MB": 20,
     "PAUSE_SECONDS": 1.2,
-    "MAX_PAPERS": 0,
-    "LOOKBACK_HOURS": 24,
+    "MAX_PAPERS": 10,
     "EMAIL_SUBJECT_PREFIX": "ArXaudio Digest",
 }
 
@@ -48,7 +47,6 @@ class Settings:
 
     # arXiv
     categories: list[str] = field(default_factory=lambda: ["astro-ph.CO", "astro-ph.GA"])
-    lookback_hours: int = 24
 
     # LLM
     llm_backend: str = "ollama"
@@ -61,7 +59,7 @@ class Settings:
     # Audio
     max_mb: int = 20
     pause_seconds: float = 1.2
-    max_papers: int = 0  # 0 = unlimited
+    max_papers: int = 10  # 0 = unlimited
 
     # Email
     email_subject_prefix: str = "ArXaudio Digest"
@@ -162,10 +160,6 @@ def _validate(settings: Settings, config_path: Path) -> None:
         raise ValueError(
             f"PAUSE_SECONDS must be non-negative (got {settings.pause_seconds!r})."
         )
-    if settings.lookback_hours <= 0:
-        raise ValueError(
-            f"LOOKBACK_HOURS must be a positive integer (got {settings.lookback_hours!r})."
-        )
     if settings.max_papers < 0:
         raise ValueError(
             f"MAX_PAPERS must be 0 (unlimited) or a positive integer "
@@ -210,7 +204,6 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
     # Build the settings object from config values + defaults
     settings = Settings(
         categories=list(get("CATEGORIES")),           # type: ignore[arg-type]
-        lookback_hours=int(get("LOOKBACK_HOURS")),     # type: ignore[arg-type]
         llm_backend=str(get("LLM_BACKEND")),
         ollama_model=str(get("OLLAMA_MODEL")),
         tts_backend=str(get("TTS_BACKEND")),
@@ -244,9 +237,8 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         )
 
     logger.info(
-        "Settings loaded: %d categories, lookback_hours=%d, model=%s, voice=%s",
+        "Settings loaded: %d categories, model=%s, voice=%s",
         len(settings.categories),
-        settings.lookback_hours,
         settings.ollama_model,
         settings.tts_voice,
     )

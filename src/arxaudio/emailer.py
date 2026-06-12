@@ -9,10 +9,16 @@ from environment variables (``SMTP_HOST``, ``SMTP_PORT``, ``SMTP_USER``,
 Usage::
 
     from arxaudio.emailer import send_digest
+    from arxaudio.models import Paper
     from arxaudio.settings import load_settings
 
     settings = load_settings()
-    send_digest(settings, "/tmp/digest.mp3", n_papers=7, paper_titles=[...])
+    send_digest(
+        settings,
+        "/tmp/digest.mp3",
+        audio_papers=[...],   # papers included in the MP3
+        extra_papers=[...],   # next-tier papers listed in email only
+    )
 """
 
 from __future__ import annotations
@@ -27,6 +33,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
+from arxaudio.models import Paper
 from arxaudio.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -39,8 +46,8 @@ logger = logging.getLogger(__name__)
 def send_digest(
     settings: Settings,
     mp3_path: str | Path,
-    n_papers: int,
-    paper_titles: list[str],
+    audio_papers: list[Paper],
+    extra_papers: list[Paper],
 ) -> None:
     """Send the daily digest email with an MP3 attachment.
 
@@ -51,10 +58,12 @@ def send_digest(
         be True or this function raises immediately.
     mp3_path:
         Path to the MP3 file to attach.
-    n_papers:
-        Number of papers included in the audio (used in the subject line).
-    paper_titles:
-        Ordered list of paper titles to include in the plain-text body.
+    audio_papers:
+        Ranked papers included in the attached MP3 (drives the paper count in
+        the subject line and the first section of the body).
+    extra_papers:
+        Next-tier papers listed in the email body only (no audio).  When empty
+        the second section and divider are omitted from the body.
 
     Raises
     ------
@@ -86,17 +95,19 @@ def send_digest(
     recipient = settings.effective_email_to
     sender = settings.effective_email_from
 
-    subject = _build_subject(settings.email_subject_prefix, n_papers)
-    body = _build_body(n_papers, paper_titles)
+    n_audio = len(audio_papers)
+    subject = _build_subject(settings.email_subject_prefix, n_audio)
+    body = _build_body(audio_papers, extra_papers)
     msg = _build_message(sender, recipient, subject, body, mp3_path)
 
     _send(settings, msg, sender, recipient)
     logger.info(
-        "Digest sent to %s (subject: %r, attachment: %s, papers: %d).",
+        "Digest sent to %s (subject: %r, attachment: %s, audio papers: %d, extra papers: %d).",
         recipient,
         subject,
         mp3_path.name,
-        n_papers,
+        n_audio,
+        len(extra_papers),
     )
 
 
@@ -111,18 +122,40 @@ def _build_subject(prefix: str, n_papers: int) -> str:
     return f"{prefix} — {today} ({n_papers} {plural})"
 
 
-def _build_body(n_papers: int, paper_titles: list[str]) -> str:
+def _paper_byline(paper: Paper) -> str:
+    """Return 'First Author et al. — <url>' or 'First Author — <url>'."""
+    author = paper.first_author
+    if len(paper.authors) > 1:
+        author += " et al."
+    return f"  {author} — {paper.url}"
+
+
+def _build_body(audio_papers: list[Paper], extra_papers: list[Paper]) -> str:
     """Return the plain-text email body."""
     today = date.today().strftime("%A, %B %-d %Y")
+    n_audio = len(audio_papers)
     lines: list[str] = [
         f"Your ArXaudio digest for {today}",
-        f"{n_papers} paper{'s' if n_papers != 1 else ''} included in today's audio.",
+        f"{n_audio} paper{'s' if n_audio != 1 else ''} included in today's audio.",
         "",
-        "Papers in this digest:",
-        "----------------------",
+        "In today's audio:",
+        "------------------",
     ]
-    for i, title in enumerate(paper_titles, start=1):
-        lines.append(f"  {i:2d}. {title}")
+    for i, paper in enumerate(audio_papers, start=1):
+        lines.append(f"  {i:2d}. {paper.title}")
+        lines.append(_paper_byline(paper))
+
+    if extra_papers:
+        lines += [
+            "",
+            "---------------------------------------------",
+            "More new papers (not in the audio):",
+            "---------------------------------------------",
+        ]
+        for i, paper in enumerate(extra_papers, start=n_audio + 1):
+            lines.append(f"  {i:2d}. {paper.title}")
+            lines.append(_paper_byline(paper))
+
     lines += [
         "",
         "The MP3 file is attached.  Happy* listening!",

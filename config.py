@@ -39,7 +39,7 @@ CATEGORIES: list[str] = [
 LLM_BACKEND: str = "ollama"
 
 # OLLAMA_MODEL: the model pulled by `ollama pull <model>`.
-# qwen2.5:0.5b is tiny (~400 MB) and fast enough for keep/discard decisions.
+# qwen2.5:0.5b is tiny (~400 MB) and fast enough for title ranking decisions.
 # Larger options:  "qwen2.5:1.5b", "qwen2.5:3b", "llama3.2:1b"
 
 OLLAMA_MODEL: str = "qwen2.5:1.5b"
@@ -75,21 +75,25 @@ MAX_MB: int = 20
 
 PAUSE_SECONDS: float = 1.2
 
-# MAX_PAPERS: safety cap on how many kept papers go through TTS and into the
-# final audio file.  0 means unlimited (all kept papers are included).
+# MAX_PAPERS: controls how many papers are included in each digest section.
+#   - The top MAX_PAPERS ranked papers go through the full process → TTS →
+#     audio pipeline and are read aloud in the MP3.
+#   - The next MAX_PAPERS (ranks N+1..2N) are listed in the email only
+#     (title, first author, arXiv link), below a divider, with no audio.
+#   - 0 means unlimited: every fetched paper gets full audio treatment and
+#     there is no email-only listing section.
 # Useful if you subscribe to very active categories and want a shorter digest.
 
-MAX_PAPERS: int = 0   # 0 = unlimited
+MAX_PAPERS: int = 10
 
 
 # ---------------------------------------------------------------------------
-# Fetch window
+# Fetch
 # ---------------------------------------------------------------------------
-# LOOKBACK_HOURS: how far back (in UTC hours) to look for new papers.
-# 24 is appropriate for a daily run.  Increase to 48 if you want a weekend
-# catch-up, or to 72 for a first run after a long break.
-
-LOOKBACK_HOURS: int = 24
+# There is no fetch window to configure: each run pulls exactly the papers
+# arXiv announced that day (the daily mailing, via rss.arxiv.org) for the
+# categories above.  New submissions and cross-lists are included;
+# replacements (revised versions of older papers) are skipped.
 
 
 # ---------------------------------------------------------------------------

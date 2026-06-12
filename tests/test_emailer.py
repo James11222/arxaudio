@@ -4,6 +4,8 @@ SMTP is monkeypatched with a recording fake — no real network connections.
 """
 from __future__ import annotations
 
+import base64
+import re as _re
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from pathlib import Path
@@ -13,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from arxaudio.emailer import send_digest, _build_subject, _build_body
+from arxaudio.models import Paper
 from arxaudio.settings import Settings
 
 
@@ -35,6 +38,28 @@ def _smtp_settings(port: int = 587) -> Settings:
 
 def _no_smtp_settings() -> Settings:
     return Settings(categories=["astro-ph.CO"])
+
+
+# ---------------------------------------------------------------------------
+# Sample Paper builders
+# ---------------------------------------------------------------------------
+
+def _paper(arxiv_id: str, title: str, authors: list[str]) -> Paper:
+    return Paper(
+        arxiv_id=arxiv_id,
+        title=title,
+        abstract="An abstract.",
+        authors=authors,
+        categories=["astro-ph.CO"],
+        published="2026-06-10T00:00:00+00:00",
+        keep=True,
+    )
+
+
+PAPER_MULTI = _paper("2606.00001", "Multi-Author Paper Title", ["Smith, Alice", "Jones, Bob"])
+PAPER_SINGLE = _paper("2606.00002", "Single Author Paper Title", ["Patel, David"])
+PAPER_EXTRA1 = _paper("2606.00003", "Extra Paper One", ["Lee, Eve", "Park, Frank"])
+PAPER_EXTRA2 = _paper("2606.00004", "Extra Paper Two", ["Kim, Carol"])
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +102,24 @@ class _RecordedSMTP:
 
 
 # ---------------------------------------------------------------------------
-# Test subject and body helpers
+# Helper: decode all base64 blocks from a raw MIME message
+# ---------------------------------------------------------------------------
+
+def _decode_body(raw_bytes: bytes) -> str:
+    """Extract and decode base64-encoded MIME parts from the raw message bytes."""
+    msg_text = raw_bytes.decode("utf-8", errors="replace")
+    b64_blocks = _re.findall(r"(?:^|\n\n)((?:[A-Za-z0-9+/\n]{60,}\n*={0,2}))", msg_text)
+    parts = []
+    for block in b64_blocks:
+        try:
+            parts.append(base64.b64decode(block.replace("\n", "")).decode("utf-8", errors="replace"))
+        except Exception:
+            pass
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Test _build_subject
 # ---------------------------------------------------------------------------
 
 def test_build_subject_contains_count():
@@ -97,15 +139,99 @@ def test_build_subject_prefix():
     assert subj.startswith("My Custom Prefix")
 
 
-def test_build_body_contains_titles():
-    body = _build_body(2, ["Title One", "Title Two"])
-    assert "Title One" in body
-    assert "Title Two" in body
+# Subject count uses len(audio_papers), not total papers
+def test_subject_count_uses_audio_papers_only():
+    subj = _build_subject("ArXaudio Digest", 3)
+    assert "3" in subj
+    assert "papers" in subj
+
+
+# ---------------------------------------------------------------------------
+# Test _build_body — two sections present
+# ---------------------------------------------------------------------------
+
+def test_build_body_audio_section_present():
+    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [PAPER_EXTRA1])
+    assert "In today's audio:" in body
+    assert PAPER_MULTI.title in body
+    assert PAPER_SINGLE.title in body
+
+
+def test_build_body_extra_section_present_with_divider():
+    body = _build_body([PAPER_MULTI], [PAPER_EXTRA1, PAPER_EXTRA2])
+    assert "More new papers (not in the audio):" in body
+    assert PAPER_EXTRA1.title in body
+    assert PAPER_EXTRA2.title in body
+    # Divider is a row of dashes
+    assert "---" in body
+
+
+def test_build_body_numbering_continues_across_divider():
+    """Extra papers numbered starting after the last audio paper."""
+    audio = [PAPER_MULTI, PAPER_SINGLE]   # 1, 2
+    extra = [PAPER_EXTRA1, PAPER_EXTRA2]  # should be 3, 4
+    body = _build_body(audio, extra)
+    lines = body.splitlines()
+
+    # Find lines containing each title and check the leading number
+    def _number_for_title(title: str) -> int:
+        for line in lines:
+            if title in line:
+                m = _re.search(r"(\d+)\.", line)
+                if m:
+                    return int(m.group(1))
+        return -1
+
+    assert _number_for_title(PAPER_MULTI.title) == 1
+    assert _number_for_title(PAPER_SINGLE.title) == 2
+    assert _number_for_title(PAPER_EXTRA1.title) == 3
+    assert _number_for_title(PAPER_EXTRA2.title) == 4
+
+
+def test_build_body_first_author_and_url_present():
+    body = _build_body([PAPER_MULTI], [])
+    assert PAPER_MULTI.first_author in body
+    assert PAPER_MULTI.url in body
+
+
+def test_build_body_et_al_only_for_multi_author():
+    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [])
+    # PAPER_MULTI has 2 authors → "et al." expected
+    # PAPER_SINGLE has 1 author  → "et al." must NOT appear near that entry
+    lines = body.splitlines()
+
+    multi_idx = next(i for i, l in enumerate(lines) if PAPER_MULTI.title in l)
+    single_idx = next(i for i, l in enumerate(lines) if PAPER_SINGLE.title in l)
+
+    # Byline is the line right after the title line
+    multi_byline = lines[multi_idx + 1]
+    single_byline = lines[single_idx + 1]
+
+    assert "et al." in multi_byline
+    assert "et al." not in single_byline
+
+
+def test_build_body_url_format():
+    body = _build_body([PAPER_MULTI], [])
+    assert f"https://arxiv.org/abs/{PAPER_MULTI.arxiv_id}" in body
+
+
+def test_build_body_no_extra_omits_divider_and_second_section():
+    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [])
+    assert "More new papers" not in body
+    # Should not have a second divider beyond the audio section header line
+    assert body.count("---------------------------------------------") == 0
 
 
 def test_build_body_contains_count():
-    body = _build_body(3, ["T1", "T2", "T3"])
-    assert "3" in body
+    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [])
+    assert "2" in body
+
+
+def test_build_body_footer_present():
+    body = _build_body([PAPER_MULTI], [])
+    assert "Happy" in body
+    assert "arxaudio" in body
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +247,6 @@ def test_starttls_on_port_587(tmp_path):
     class FakeSMTP(_RecordedSMTP):
         def __init__(self, *a, **kw):
             super().__init__(*a, **kw)
-            # Copy state into the shared instance for inspection
             smtp_instance.calls = self.calls
             smtp_instance.login_args = None
             smtp_instance.sendmail_args = None
@@ -153,7 +278,7 @@ def test_starttls_on_port_587(tmp_path):
             smtp_instance.calls = self.calls
 
     with patch("arxaudio.emailer.smtplib.SMTP", FakeSMTP):
-        send_digest(_smtp_settings(587), mp3, 2, ["Paper A", "Paper B"])
+        send_digest(_smtp_settings(587), mp3, [PAPER_MULTI, PAPER_SINGLE], [])
 
     assert smtp_instance.starttls_called
     assert "login" in smtp_instance.calls
@@ -186,7 +311,6 @@ def test_smtp_ssl_on_port_465(tmp_path):
         def sendmail(self, s, r, m):
             ssl_instance["sendmail_called"] = True
 
-    # Make sure smtplib.SMTP is NOT called for port 465
     smtp_called = [False]
 
     class GuardSMTP:
@@ -213,14 +337,11 @@ def test_smtp_ssl_on_port_465(tmp_path):
 
     with patch("arxaudio.emailer.smtplib.SMTP_SSL", FakeSMTP_SSL):
         with patch("arxaudio.emailer.smtplib.SMTP", GuardSMTP):
-            send_digest(_smtp_settings(465), mp3, 1, ["Paper A"])
+            send_digest(_smtp_settings(465), mp3, [PAPER_MULTI], [])
 
-    # SMTP_SSL path: login and sendmail must be called
     assert ssl_instance["login_called"]
     assert ssl_instance["sendmail_called"]
-    # STARTTLS must NOT be called on the SSL path
     assert not ssl_instance["starttls_called"]
-    # Plain SMTP.__init__ must NOT be called on port 465
     assert not smtp_called[0]
 
 
@@ -257,11 +378,10 @@ def test_message_has_mp3_attachment(tmp_path):
             captured_msg.append(msg_bytes)
 
     with patch("arxaudio.emailer.smtplib.SMTP", CapturingSMTP):
-        send_digest(_smtp_settings(587), mp3, 3, ["T1", "T2", "T3"])
+        send_digest(_smtp_settings(587), mp3, [PAPER_MULTI, PAPER_SINGLE, PAPER_EXTRA1], [])
 
     assert captured_msg, "sendmail was not called"
     msg_text = captured_msg[0].decode("utf-8", errors="replace")
-    # The attachment should be base64-encoded content
     assert "Content-Disposition" in msg_text
     assert "attachment" in msg_text
     assert "digest.mp3" in msg_text
@@ -295,8 +415,9 @@ def test_message_subject_contains_paper_count(tmp_path):
         def sendmail(self, s, r, msg_bytes):
             captured_msg.append(msg_bytes)
 
+    audio = [PAPER_MULTI, PAPER_SINGLE, PAPER_EXTRA1, PAPER_EXTRA2, PAPER_MULTI]
     with patch("arxaudio.emailer.smtplib.SMTP", CapturingSMTP):
-        send_digest(_smtp_settings(587), mp3, 5, ["T1", "T2", "T3", "T4", "T5"])
+        send_digest(_smtp_settings(587), mp3, audio, [])
 
     assert captured_msg
     msg_text = captured_msg[0].decode("utf-8", errors="replace")
@@ -304,7 +425,8 @@ def test_message_subject_contains_paper_count(tmp_path):
     assert "5" in msg_text
 
 
-def test_message_body_lists_titles(tmp_path):
+def test_subject_count_uses_audio_papers_not_extras(tmp_path):
+    """Subject line count must equal len(audio_papers), not total papers."""
     mp3 = tmp_path / "digest.mp3"
     mp3.write_bytes(b"\xff\xfb" + b"\x00" * 200)
 
@@ -332,31 +454,104 @@ def test_message_body_lists_titles(tmp_path):
         def sendmail(self, s, r, msg_bytes):
             captured_msg.append(msg_bytes)
 
-    titles = ["Cosmological Constraints Paper", "Galaxy Clustering Study"]
+    # 2 audio, 2 extra → subject should say "2 papers"
     with patch("arxaudio.emailer.smtplib.SMTP", CapturingSMTP):
-        send_digest(_smtp_settings(587), mp3, 2, titles)
+        send_digest(_smtp_settings(587), mp3, [PAPER_MULTI, PAPER_SINGLE], [PAPER_EXTRA1, PAPER_EXTRA2])
 
     assert captured_msg
+    msg_text = captured_msg[0].decode("utf-8", errors="replace")
+    # Decode the (possibly RFC2047-encoded) subject value for inspection
+    from email import message_from_bytes
+    from email.header import decode_header
+    parsed = message_from_bytes(captured_msg[0])
+    subject_parts = decode_header(parsed["Subject"])
+    subject_decoded = "".join(
+        part.decode(enc or "utf-8") if isinstance(part, bytes) else part
+        for part, enc in subject_parts
+    )
+    # Subject should say "2 papers" (the audio count), not "4 papers"
+    assert "2 papers" in subject_decoded
+    assert "4 papers" not in subject_decoded
 
-    # The plain-text body is base64-encoded in the MIME message.
-    # Decode all base64 chunks from the message and search for titles there.
-    import base64
-    import re as _re
-    raw = captured_msg[0]
-    msg_text = raw.decode("utf-8", errors="replace")
 
-    # Extract base64 blocks from the message
-    b64_blocks = _re.findall(r"(?:^|\n\n)((?:[A-Za-z0-9+/\n]{60,}\n*={0,2}))", msg_text)
-    decoded_bodies = []
-    for block in b64_blocks:
-        try:
-            decoded_bodies.append(base64.b64decode(block.replace("\n", "")).decode("utf-8", errors="replace"))
-        except Exception:
+def test_message_body_lists_titles_and_authors(tmp_path):
+    mp3 = tmp_path / "digest.mp3"
+    mp3.write_bytes(b"\xff\xfb" + b"\x00" * 200)
+
+    captured_msg: list[bytes] = []
+
+    class CapturingSMTP:
+        def __init__(self, *a, **kw):
             pass
 
-    all_decoded = "\n".join(decoded_bodies)
-    assert "Cosmological Constraints Paper" in all_decoded
-    assert "Galaxy Clustering Study" in all_decoded
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self):
+            pass
+
+        def login(self, u, p):
+            pass
+
+        def sendmail(self, s, r, msg_bytes):
+            captured_msg.append(msg_bytes)
+
+    with patch("arxaudio.emailer.smtplib.SMTP", CapturingSMTP):
+        send_digest(_smtp_settings(587), mp3, [PAPER_MULTI, PAPER_SINGLE], [PAPER_EXTRA1])
+
+    assert captured_msg
+    all_decoded = _decode_body(captured_msg[0])
+
+    assert PAPER_MULTI.title in all_decoded
+    assert PAPER_SINGLE.title in all_decoded
+    assert PAPER_EXTRA1.title in all_decoded
+    assert PAPER_MULTI.first_author in all_decoded
+    assert "et al." in all_decoded   # PAPER_MULTI is multi-author
+    assert PAPER_SINGLE.first_author in all_decoded
+    assert PAPER_MULTI.url in all_decoded
+    assert PAPER_EXTRA1.url in all_decoded
+
+
+def test_extra_section_absent_when_empty(tmp_path):
+    mp3 = tmp_path / "digest.mp3"
+    mp3.write_bytes(b"\xff\xfb" + b"\x00" * 200)
+
+    captured_msg: list[bytes] = []
+
+    class CapturingSMTP:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self):
+            pass
+
+        def login(self, u, p):
+            pass
+
+        def sendmail(self, s, r, msg_bytes):
+            captured_msg.append(msg_bytes)
+
+    with patch("arxaudio.emailer.smtplib.SMTP", CapturingSMTP):
+        send_digest(_smtp_settings(587), mp3, [PAPER_MULTI], [])
+
+    assert captured_msg
+    all_decoded = _decode_body(captured_msg[0])
+    assert "More new papers" not in all_decoded
 
 
 # ---------------------------------------------------------------------------
@@ -367,10 +562,10 @@ def test_raises_when_not_configured(tmp_path):
     mp3 = tmp_path / "digest.mp3"
     mp3.write_bytes(b"\xff\xfb" + b"\x00" * 100)
     with pytest.raises(RuntimeError, match="SMTP is not configured"):
-        send_digest(_no_smtp_settings(), mp3, 1, ["T"])
+        send_digest(_no_smtp_settings(), mp3, [PAPER_MULTI], [])
 
 
 def test_raises_when_mp3_missing():
     settings = _smtp_settings()
     with pytest.raises(FileNotFoundError):
-        send_digest(settings, "/tmp/nonexistent_arxaudio_test.mp3", 1, ["T"])
+        send_digest(settings, "/tmp/nonexistent_arxaudio_test.mp3", [PAPER_MULTI], [])

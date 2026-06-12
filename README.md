@@ -1,6 +1,6 @@
 # arxaudio
 
-Turn today's arXiv abstracts into a podcast-style MP3, delivered to your inbox every morning — no API keys, no paid services, no local GPU required. Fork the repo, drop in your interests, add five email secrets, and GitHub Actions handles everything else: fetching new papers from the arXiv API, filtering them against your research preferences with a tiny local language model, cleaning up LaTeX notation for speech, synthesizing audio with a free neural TTS voice, and emailing you one MP3 a day.
+Turn today's arXiv abstracts into a podcast-style MP3, delivered to your inbox every morning — no API keys, no paid services, no local GPU required. Fork the repo, drop in your interests, add five email secrets, and GitHub Actions handles everything else: fetching the papers arXiv announced that day, ranking them against your research preferences with a tiny local language model, cleaning up LaTeX notation for speech, synthesizing audio with a free neural TTS voice, and emailing you one MP3 a day.
 
 ---
 
@@ -10,23 +10,23 @@ Turn today's arXiv abstracts into a podcast-style MP3, delivered to your inbox e
 arXiv API
     │  feedparser (no key)
     ▼
-┌─────────┐   ┌──────────┐   ┌──────────┐   ┌────────────┐   ┌─────────┐
-│  Fetch  │──▶│  Filter  │──▶│ Process  │──▶│    TTS     │──▶│  Email  │
-└─────────┘   └──────────┘   └──────────┘   └────────────┘   └─────────┘
-               ollama LLM      ollama LLM     edge-tts          smtplib
-               keep/discard    LaTeX→spoken   per-paper MP3     SMTP/TLS
-                                              ffmpeg concat
+┌─────────┐   ┌──────────┐   ┌──────────────┐   ┌──────────┐   ┌────────────┐   ┌─────────┐
+│  Fetch  │──▶│   Rank   │──▶│  top-N only  │──▶│ Process  │──▶│    TTS     │──▶│  Email  │
+└─────────┘   └──────────┘   └──────────────┘   └──────────┘   └────────────┘   └─────────┘
+               ollama LLM      next-N: email        ollama LLM    edge-tts          smtplib
+               title ranking   listing only         LaTeX→spoken  per-paper MP3     SMTP/TLS
+                                                                  ffmpeg concat
 ```
 
-1. **Fetch** — `fetch.py` queries the arXiv Atom API (no key) for each category in `config.py`, de-duplicates papers across categories, and keeps only those published within the configured look-back window. One request per category with a polite 3-second delay between requests, as required by arXiv's terms of service.
+1. **Fetch** — `fetch.py` pulls the daily announcement RSS feed (`rss.arxiv.org/rss/<category>`, no key) for each category in `config.py` and de-duplicates papers across categories. Each feed is exactly that day's mailing — the same papers that appear on `arxiv.org/list/<category>/new` that morning. New submissions and cross-lists are kept; replacements (revised versions of older papers) are skipped. One request per category with a polite 3-second delay between requests, as required by arXiv's terms of service.
 
-2. **Filter** — `filter.py` sends each paper's title and abstract to a tiny ollama LLM (default: `qwen2.5:0.5b`, ~400 MB) alongside your `preferences.md`. The model answers `KEEP` or `DISCARD`. Context is cleared between every call by design so the small model never loses focus. Any unparseable or errored response defaults to `KEEP` — papers are never silently dropped.
+2. **Rank** — `rank.py` sends all fetched paper titles to a tiny ollama LLM (default: `qwen2.5:0.5b`, ~400 MB) in a single call alongside your `preferences.md`. The model ranks papers by relevance (1 = most relevant). The top `MAX_PAPERS` ranked papers proceed to full audio treatment; the next `MAX_PAPERS` (ranks N+1..2N) are listed in the email only (title, first author, arXiv link). Any LLM error falls back silently to arrival order — papers are never lost.
 
 3. **Process** — `process.py` converts LaTeX and math notation into speakable English. A deterministic regex/literal pass driven by `math_replacements.md` runs first (fast, reliable), then one stateless LLM call per paper catches the long tail. The LLM output passes a length-drift and chatter check; if it fails, the regex-only version is used. The model is instructed to only replace notation — never paraphrase.
 
 4. **TTS + assembly** — `audio.py` and `tts/edge_backend.py` synthesize each paper as a separate MP3 using Microsoft's `edge-tts` (free, no key). Each paper is read as "title, by first author et al., abstract." Segments are joined with a configurable silence gap. If the result exceeds `MAX_MB` (default 20 MB), `audio.py` re-encodes progressively at lower bitrates (48k → 32k → 24k) until it fits.
 
-5. **Email** — `emailer.py` uses stdlib `smtplib` to attach the MP3 and send it. Credentials come entirely from environment variables (GitHub Secrets in CI). A plain-text body lists every paper title so you can skim before you listen.
+5. **Email** — `emailer.py` uses stdlib `smtplib` to attach the MP3 and send it. Credentials come entirely from environment variables (GitHub Secrets in CI). The email body lists all audio papers plus, below a divider, the email-only runner-up papers so you can skim before you listen.
 
 ### Pluggable backends
 
@@ -61,7 +61,7 @@ The full list of valid category strings is at: https://arxiv.org/category_taxono
 
 ### 3. Edit `preferences.md` — describe your research interests
 
-This plain-text (Markdown) file is passed verbatim to the filter LLM. Write in natural language. Be specific about methods, surveys, and topics you care about. Include a "Not interested in" section to help the model focus. See the existing file for an example.
+This plain-text (Markdown) file is passed verbatim to the ranking LLM. Write in natural language. Be specific about methods, surveys, and topics you care about. Include a "Not interested in" section to help the model focus. See the existing file for an example.
 
 ### 4. Add repository secrets for email delivery
 
@@ -105,7 +105,6 @@ On the **Actions** tab, select **"arxaudio daily digest"**, then click **"Run wo
 
 | Input            | Description                                                   |
 |------------------|---------------------------------------------------------------|
-| `lookback_hours` | Override `LOOKBACK_HOURS` from `config.py` for this one run  |
 | `skip_email`     | Build the audio but do not send the email                     |
 
 The first run downloads the ollama model (~400 MB for `qwen2.5:0.5b`); subsequent runs restore it from the Actions cache and start much faster.
@@ -161,7 +160,7 @@ python -m arxaudio.pipeline
 ### Try it without ollama or email
 
 ```bash
-python -m arxaudio.pipeline --dry-run --no-filter --no-llm-clean
+python -m arxaudio.pipeline --dry-run --no-rank --no-llm-clean
 ```
 
 This fetches papers, skips all LLM calls, and prints what would be synthesized — no ollama, no email, no output file.
@@ -175,8 +174,7 @@ This fetches papers, skips all LLM calls, and prints what would be synthesized �
 | `--output PATH`         | string  | Output MP3 path (default: `./output/arxaudio_YYYY-MM-DD.mp3`)               |
 | `--verbose`             | flag    | Enable DEBUG logging                                                        |
 | `--max-papers N`        | integer | Override `MAX_PAPERS` (0 = unlimited)                                       |
-| `--lookback-hours N`    | integer | Override `LOOKBACK_HOURS`                                                   |
-| `--no-filter`           | flag    | Skip the LLM relevance filter; keep every fetched paper                     |
+| `--no-rank`             | flag    | Skip the LLM ranking; use arrival order for all fetched papers              |
 | `--no-llm-clean`        | flag    | Skip the LLM math-cleanup pass; use regex-only replacements                 |
 | `--no-email`            | flag    | Build the audio but do not send the email                                   |
 | `--dry-run`             | flag    | Fetch + filter + process only; print what would be synthesized, then exit   |
@@ -198,13 +196,12 @@ All user-facing settings live in `config.py` at the repository root. Do not put 
 | `TTS_VOICE`            | `"en-US-AndrewNeural"`              | Edge TTS voice identifier. Run `edge-tts --list-voices` to browse options                   |
 | `MAX_MB`               | `20`                                | Maximum MP3 size in megabytes. Audio is bitrate-stepped-down automatically if exceeded      |
 | `PAUSE_SECONDS`        | `1.2`                               | Silence gap in seconds between papers                                                        |
-| `MAX_PAPERS`           | `0`                                 | Cap on kept papers that go through TTS. `0` means unlimited                                 |
-| `LOOKBACK_HOURS`       | `24`                                | How far back (UTC hours) to look for new papers                                              |
+| `MAX_PAPERS`           | `10`                                | Top N ranked papers get full audio; next N are listed in the email only. `0` means unlimited (all papers get audio, no email-only section) |
 | `EMAIL_SUBJECT_PREFIX` | `"ArXaudio Digest"`                 | Prepended to every email subject. The pipeline appends the date and paper count             |
 
 ### preferences.md
 
-A plain Markdown file read verbatim by the filter LLM as its system context. Write in plain English. Describe topics, methods, surveys, and datasets you want to follow. Include a "Not interested in" section to sharpen the filter. Changes take effect on the next run with no code changes required.
+A plain Markdown file read verbatim by the ranking LLM as its system context. Write in plain English. Describe topics, methods, surveys, and datasets you want to follow. Include a "Not interested in" section to sharpen the ranking. Changes take effect on the next run with no code changes required.
 
 ### math_replacements.md
 
@@ -223,7 +220,7 @@ Both are markdown tables parsed by `process.py`. **Extend the pipeline by editin
 
 **Different voice:** Run `edge-tts --list-voices` to see all available neural voices, then set `TTS_VOICE` in `config.py`. Good English options include `en-US-JennyNeural`, `en-GB-RyanNeural`, and `en-AU-NatashaNeural`.
 
-**Larger or different ollama model:** Change `OLLAMA_MODEL` in `config.py`. The workflow reads that variable at runtime to set the cache key and run `ollama pull` — no changes to `daily.yml` are needed. Larger options like `qwen2.5:1.5b` or `llama3.2:1b` improve filter accuracy at the cost of a larger cache and slower CI.
+**Larger or different ollama model:** Change `OLLAMA_MODEL` in `config.py`. The workflow reads that variable at runtime to set the cache key and run `ollama pull` — no changes to `daily.yml` are needed. Larger options like `qwen2.5:1.5b` or `llama3.2:1b` improve ranking quality at the cost of a larger cache and slower CI.
 
 **Swapping the TTS engine:** Subclass `TTSBackend` (in `src/arxaudio/tts/base.py`), implement `synthesize(text, voice, out_path)`, and register it in `_TTS_REGISTRY` in `pipeline.py`. Set `TTS_BACKEND` in `config.py`.
 
@@ -239,8 +236,8 @@ Both are markdown tables parsed by `process.py`. **Extend the pipeline by editin
 |---------|----------------------|
 | No email received | Check your spam folder. Verify the five secrets are set correctly in GitHub. If SMTP is only partially configured (e.g. `SMTP_HOST` set but `SMTP_PASSWORD` missing), the pipeline exits with an error — check the Actions log. |
 | Gmail authentication error | You must use an App Password, not your regular account password. See the Gmail walkthrough above. |
-| Zero papers in the output | arXiv announces new papers Monday through Friday only. Weekend and holiday runs return zero papers normally. If the run is on a weekday, try increasing `lookback_hours` via `workflow_dispatch`. |
-| Papers fetched but all discarded | The tiny model defaults to `KEEP` on confusion, so a zero-keep result usually means preferences are very broadly filtering. Sharpen your `preferences.md` "Not interested in" section. Run locally with `--dry-run` to see filter decisions in the log. |
+| Zero papers in the output | arXiv announces new papers Monday through Friday only. Weekend and holiday runs see the most recent weekday mailing (or nothing new). Run locally with `--dry-run --verbose` to see what today's feed contains. |
+| No papers in the audio | The ranking LLM uses arrival order as a fallback, so this is unlikely unless `MAX_PAPERS` is set very low or no papers were fetched. Try running locally with `--dry-run --verbose` to see the ranking output. Sharpen your `preferences.md` to improve ranking quality. |
 | `ollama: connection refused` (local) | The ollama server is not running. Start it with `ollama serve` in a separate terminal. |
 | `model not found` / `404` error | The model has not been pulled. Run `ollama pull qwen2.5:0.5b` (or whatever `OLLAMA_MODEL` is set to). |
 | MP3 too large to email | The bitrate step-down is automatic (64k → 48k → 32k → 24k). If it is still over the limit, lower `MAX_PAPERS` in `config.py` to cap the number of papers per run. |
@@ -272,8 +269,8 @@ arxaudio/
 ├── src/arxaudio/
 │   ├── models.py              # Paper dataclass — the contract between stages
 │   ├── settings.py            # Loads config.py + SMTP env vars into Settings
-│   ├── fetch.py               # arXiv API: papers in the look-back window
-│   ├── filter.py              # LLM keep/discard per abstract
+│   ├── fetch.py               # arXiv RSS: papers announced today
+│   ├── rank.py                # LLM title ranking (one call for all papers)
 │   ├── process.py             # Math-notation → spoken text (regex + LLM)
 │   ├── audio.py               # Per-paper TTS segments → single MP3, size budget
 │   ├── emailer.py             # SMTP send with MP3 attachment

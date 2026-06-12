@@ -1,105 +1,135 @@
-"""Tests for arxaudio.fetch: Atom feed parsing, cutoff, de-duplication.
+"""Tests for arxaudio.fetch: RSS feed parsing, announce-type filtering, de-dup.
 
 All tests are offline — the HTTP layer is monkeypatched to return a canned
-Atom XML string. No real arXiv API calls are made.
+RSS XML string mirroring the real rss.arxiv.org format. No network calls.
 """
 from __future__ import annotations
-
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
 import arxaudio.fetch as fetch_module
 from arxaudio.fetch import (
     _normalise_whitespace,
+    _parse_abstract,
     _parse_arxiv_id,
-    _parse_entry,
-    fetch_recent_papers,
+    fetch_announced_papers,
 )
 
 # ---------------------------------------------------------------------------
-# Canned Atom XML feed (3 entries)
+# Canned RSS feed (5 items), matching the live rss.arxiv.org structure:
+# guid "oai:arXiv.org:<id>v<n>", comma-joined dc:creator, description with
+# "arXiv:<id> Announce Type: <type> \nAbstract: <text>", arxiv:announce_type.
 # ---------------------------------------------------------------------------
-# Entry 1: recent paper, hard-wrapped title/abstract, multiple categories
-# Entry 2: same paper appearing in a second category (de-dupe test)
-# Entry 3: an older paper that should be excluded by the cutoff
+# Item 1: announce type "new", multi-author, multi-category, wrapped title
+# Item 2: announce type "cross" (kept — new paper cross-listed here)
+# Item 3: announce type "replace" (skipped)
+# Item 4: announce type "replace-cross" (skipped)
+# Item 5: no announce type anywhere (kept conservatively)
 
-_NOW = datetime.now(tz=timezone.utc)
-_RECENT = (_NOW - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
-_OLD = (_NOW - timedelta(hours=96)).strftime("%Y-%m-%dT%H:%M:%SZ")
+_PUBDATE = "Fri, 12 Jun 2026 00:00:00 -0400"
 
-# We use entry id "2606.01234v2" to test version stripping
 _FEED_XML = f"""\
 <?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <title>ArXiv Query</title>
-  <id>http://arxiv.org/api/query?results</id>
-  <updated>{_RECENT}</updated>
-  <opensearch:totalResults xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">3</opensearch:totalResults>
-  <opensearch:startIndex xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">0</opensearch:startIndex>
-  <opensearch:itemsPerPage xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">100</opensearch:itemsPerPage>
+<rss version="2.0"
+     xmlns:dc="http://purl.org/dc/elements/1.1/"
+     xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <channel>
+    <title>astro-ph.CO updates on arXiv.org</title>
+    <link>https://rss.arxiv.org/rss/astro-ph.CO</link>
+    <description>astro-ph.CO updates on the arXiv.org e-print archive.</description>
+    <pubDate>{_PUBDATE}</pubDate>
 
-  <entry>
-    <id>http://arxiv.org/abs/2606.01234v2</id>
-    <updated>{_RECENT}</updated>
-    <published>{_RECENT}</published>
-    <title>Cosmological constraints from
-    weak lensing with sigma eight</title>
-    <summary>  We present new constraints on
-    sigma eight from LSST Year-1 data.
-    Our analysis uses a Lambda CDM model.
-    The chi-squared per degree of freedom is 1.05.  </summary>
-    <author><name>Smith, Alice</name></author>
-    <author><name>Jones, Bob</name></author>
-    <author><name>Kim, Carol</name></author>
-    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="astro-ph.CO" scheme="http://arxiv.org/schemas/atom"/>
-    <category term="astro-ph.CO" scheme="http://arxiv.org/schemas/atom"/>
-    <category term="astro-ph.GA" scheme="http://arxiv.org/schemas/atom"/>
-  </entry>
+    <item>
+      <title>Cosmological constraints from
+      weak lensing with sigma eight</title>
+      <link>https://arxiv.org/abs/2606.01234</link>
+      <description>arXiv:2606.01234v2 Announce Type: new
+Abstract:   We present new constraints on
+      sigma eight from LSST Year-1 data.
+      Our analysis uses a Lambda CDM model.  </description>
+      <guid isPermaLink="false">oai:arXiv.org:2606.01234v2</guid>
+      <category>astro-ph.CO</category>
+      <category>astro-ph.GA</category>
+      <pubDate>{_PUBDATE}</pubDate>
+      <arxiv:announce_type>new</arxiv:announce_type>
+      <dc:creator>Alice Smith, Bob Jones, Carol Kim</dc:creator>
+    </item>
 
-  <entry>
-    <id>http://arxiv.org/abs/2606.05678v1</id>
-    <updated>{_RECENT}</updated>
-    <published>{_RECENT}</published>
-    <title>Galaxy clustering in the CF4++ZOA survey</title>
-    <summary>We study galaxy clustering at h^-1 Mpc scales.</summary>
-    <author><name>Patel, David</name></author>
-    <category term="astro-ph.GA" scheme="http://arxiv.org/schemas/atom"/>
-  </entry>
+    <item>
+      <title>Galaxy clustering in the CF4++ZOA survey</title>
+      <link>https://arxiv.org/abs/2606.05678</link>
+      <description>arXiv:2606.05678v1 Announce Type: cross
+Abstract: We study galaxy clustering at h^-1 Mpc scales.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2606.05678v1</guid>
+      <category>astro-ph.GA</category>
+      <pubDate>{_PUBDATE}</pubDate>
+      <arxiv:announce_type>cross</arxiv:announce_type>
+      <dc:creator>David Patel</dc:creator>
+    </item>
 
-  <entry>
-    <id>http://arxiv.org/abs/2506.99999v3</id>
-    <updated>{_OLD}</updated>
-    <published>{_OLD}</published>
-    <title>An old paper outside the lookback window</title>
-    <summary>This paper was published 96 hours ago and should be excluded.</summary>
-    <author><name>Old, Author</name></author>
-    <category term="astro-ph.CO" scheme="http://arxiv.org/schemas/atom"/>
-  </entry>
-</feed>
+    <item>
+      <title>A revised paper that should be skipped</title>
+      <link>https://arxiv.org/abs/2506.99999</link>
+      <description>arXiv:2506.99999v3 Announce Type: replace
+Abstract: This is version 3 of an old paper.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2506.99999v3</guid>
+      <category>astro-ph.CO</category>
+      <pubDate>{_PUBDATE}</pubDate>
+      <arxiv:announce_type>replace</arxiv:announce_type>
+      <dc:creator>Old Author</dc:creator>
+    </item>
+
+    <item>
+      <title>A revised cross-listed paper that should be skipped</title>
+      <link>https://arxiv.org/abs/2505.11111</link>
+      <description>arXiv:2505.11111v2 Announce Type: replace-cross
+Abstract: Version 2 of an old cross-listed paper.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2505.11111v2</guid>
+      <category>astro-ph.CO</category>
+      <pubDate>{_PUBDATE}</pubDate>
+      <arxiv:announce_type>replace-cross</arxiv:announce_type>
+      <dc:creator>Other Author</dc:creator>
+    </item>
+
+    <item>
+      <title>A paper with no announce type at all</title>
+      <link>https://arxiv.org/abs/2606.07777</link>
+      <description>We cannot tell what kind of announcement this is.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2606.07777v1</guid>
+      <category>astro-ph.CO</category>
+      <pubDate>{_PUBDATE}</pubDate>
+      <dc:creator>Eve Lee</dc:creator>
+    </item>
+  </channel>
+</rss>
 """
 
-# A second feed variant that only contains entry 2606.01234 (for de-dupe test)
+# A second feed variant for the de-dupe test: the same 2606.01234 paper as it
+# appears in its cross-listed category's mailing.
 _FEED_XML_CATEGORY2 = f"""\
 <?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <title>ArXiv Query</title>
-  <id>http://arxiv.org/api/query?results</id>
-  <updated>{_RECENT}</updated>
-  <opensearch:totalResults xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">1</opensearch:totalResults>
-  <opensearch:startIndex xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">0</opensearch:startIndex>
-  <opensearch:itemsPerPage xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">100</opensearch:itemsPerPage>
+<rss version="2.0"
+     xmlns:dc="http://purl.org/dc/elements/1.1/"
+     xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <channel>
+    <title>astro-ph.GA updates on arXiv.org</title>
+    <link>https://rss.arxiv.org/rss/astro-ph.GA</link>
+    <description>astro-ph.GA updates on the arXiv.org e-print archive.</description>
+    <pubDate>{_PUBDATE}</pubDate>
 
-  <entry>
-    <id>http://arxiv.org/abs/2606.01234v2</id>
-    <updated>{_RECENT}</updated>
-    <published>{_RECENT}</published>
-    <title>Cosmological constraints from weak lensing with sigma eight</title>
-    <summary>We present new constraints on sigma eight from LSST Year-1 data.</summary>
-    <author><name>Smith, Alice</name></author>
-    <category term="astro-ph.GA" scheme="http://arxiv.org/schemas/atom"/>
-  </entry>
-</feed>
+    <item>
+      <title>Cosmological constraints from weak lensing with sigma eight</title>
+      <link>https://arxiv.org/abs/2606.01234</link>
+      <description>arXiv:2606.01234v2 Announce Type: cross
+Abstract: We present new constraints on sigma eight from LSST Year-1 data.</description>
+      <guid isPermaLink="false">oai:arXiv.org:2606.01234v2</guid>
+      <category>astro-ph.GA</category>
+      <pubDate>{_PUBDATE}</pubDate>
+      <arxiv:announce_type>cross</arxiv:announce_type>
+      <dc:creator>Alice Smith, Bob Jones, Carol Kim</dc:creator>
+    </item>
+  </channel>
+</rss>
 """
 
 
@@ -123,24 +153,34 @@ def test_normalise_whitespace_leading_trailing():
     assert _normalise_whitespace("  hello  ") == "hello"
 
 
-def test_parse_arxiv_id_versioned():
-    raw = "http://arxiv.org/abs/2606.01234v2"
-    assert _parse_arxiv_id(raw) == "2606.01234"
+def test_parse_arxiv_id_oai_versioned():
+    assert _parse_arxiv_id("oai:arXiv.org:2606.01234v2") == "2606.01234"
+
+
+def test_parse_arxiv_id_abs_url_versioned():
+    assert _parse_arxiv_id("http://arxiv.org/abs/2606.01234v2") == "2606.01234"
 
 
 def test_parse_arxiv_id_https():
-    raw = "https://arxiv.org/abs/2506.99999v1"
-    assert _parse_arxiv_id(raw) == "2506.99999"
+    assert _parse_arxiv_id("https://arxiv.org/abs/2506.99999v1") == "2506.99999"
 
 
 def test_parse_arxiv_id_no_version():
-    raw = "http://arxiv.org/abs/2506.00001"
-    assert _parse_arxiv_id(raw) == "2506.00001"
+    assert _parse_arxiv_id("oai:arXiv.org:2506.00001") == "2506.00001"
 
 
 def test_parse_arxiv_id_short_form_passthrough():
     # If the ID is already in short form, it should be returned as-is
     assert _parse_arxiv_id("2606.01234") == "2606.01234"
+
+
+def test_parse_abstract_strips_preamble():
+    summary = "arXiv:2606.01234v1 Announce Type: new \nAbstract: The result."
+    assert _parse_abstract(summary) == "The result."
+
+
+def test_parse_abstract_without_preamble_passthrough():
+    assert _parse_abstract("Just an abstract.") == "Just an abstract."
 
 
 # ---------------------------------------------------------------------------
@@ -154,32 +194,32 @@ def _make_fetch_url_mock(xml_bytes: bytes):
     return _fake_fetch_url
 
 
+def _fetch_main_feed(monkeypatch):
+    monkeypatch.setattr(
+        fetch_module, "_fetch_url", _make_fetch_url_mock(_FEED_XML.encode())
+    )
+    monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
+    return fetch_announced_papers(["astro-ph.CO"])
+
+
 # ---------------------------------------------------------------------------
-# Integration tests via fetch_recent_papers (monkeypatched HTTP)
+# Integration tests via fetch_announced_papers (monkeypatched HTTP)
 # ---------------------------------------------------------------------------
 
 def test_fetch_parses_id_short_form(monkeypatch):
-    monkeypatch.setattr(fetch_module, "_fetch_url", _make_fetch_url_mock(_FEED_XML.encode()))
-    monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
-    papers = fetch_recent_papers(["astro-ph.CO"], lookback_hours=24)
+    papers = _fetch_main_feed(monkeypatch)
     ids = {p.arxiv_id for p in papers}
     assert "2606.01234" in ids
 
 
 def test_fetch_version_stripped(monkeypatch):
-    monkeypatch.setattr(fetch_module, "_fetch_url", _make_fetch_url_mock(_FEED_XML.encode()))
-    monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
-    papers = fetch_recent_papers(["astro-ph.CO"], lookback_hours=24)
-    ids = [p.arxiv_id for p in papers]
-    # No "v2" or "v1" suffix should appear
-    for arxiv_id in ids:
+    papers = _fetch_main_feed(monkeypatch)
+    for arxiv_id in (p.arxiv_id for p in papers):
         assert "v" not in arxiv_id or not arxiv_id[-1].isdigit()
 
 
 def test_fetch_whitespace_collapsed_in_title(monkeypatch):
-    monkeypatch.setattr(fetch_module, "_fetch_url", _make_fetch_url_mock(_FEED_XML.encode()))
-    monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
-    papers = fetch_recent_papers(["astro-ph.CO"], lookback_hours=24)
+    papers = _fetch_main_feed(monkeypatch)
     target = next((p for p in papers if p.arxiv_id == "2606.01234"), None)
     assert target is not None
     # The title had a hard newline + indent; must be a single clean string
@@ -187,43 +227,60 @@ def test_fetch_whitespace_collapsed_in_title(monkeypatch):
     assert "  " not in target.title
 
 
+def test_fetch_abstract_preamble_stripped(monkeypatch):
+    """The 'arXiv:<id> Announce Type:' preamble must not leak into the abstract."""
+    papers = _fetch_main_feed(monkeypatch)
+    target = next((p for p in papers if p.arxiv_id == "2606.01234"), None)
+    assert target is not None
+    assert "Announce Type" not in target.abstract
+    assert "arXiv:" not in target.abstract
+    assert target.abstract.startswith("We present new constraints")
+
+
 def test_fetch_whitespace_collapsed_in_abstract(monkeypatch):
-    monkeypatch.setattr(fetch_module, "_fetch_url", _make_fetch_url_mock(_FEED_XML.encode()))
-    monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
-    papers = fetch_recent_papers(["astro-ph.CO"], lookback_hours=24)
+    papers = _fetch_main_feed(monkeypatch)
     target = next((p for p in papers if p.arxiv_id == "2606.01234"), None)
     assert target is not None
     assert "\n" not in target.abstract
     assert "  " not in target.abstract
 
 
-def test_fetch_authors_parsed(monkeypatch):
-    monkeypatch.setattr(fetch_module, "_fetch_url", _make_fetch_url_mock(_FEED_XML.encode()))
-    monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
-    papers = fetch_recent_papers(["astro-ph.CO"], lookback_hours=24)
+def test_fetch_authors_split_from_creator(monkeypatch):
+    """The comma-joined dc:creator string becomes one entry per author."""
+    papers = _fetch_main_feed(monkeypatch)
     target = next((p for p in papers if p.arxiv_id == "2606.01234"), None)
     assert target is not None
-    assert "Smith, Alice" in target.authors
-    assert "Jones, Bob" in target.authors
-    assert "Kim, Carol" in target.authors
+    assert target.authors == ["Alice Smith", "Bob Jones", "Carol Kim"]
+    assert target.first_author == "Alice Smith"
 
 
 def test_fetch_categories_parsed(monkeypatch):
-    monkeypatch.setattr(fetch_module, "_fetch_url", _make_fetch_url_mock(_FEED_XML.encode()))
-    monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
-    papers = fetch_recent_papers(["astro-ph.CO"], lookback_hours=24)
+    papers = _fetch_main_feed(monkeypatch)
     target = next((p for p in papers if p.arxiv_id == "2606.01234"), None)
     assert target is not None
     assert "astro-ph.CO" in target.categories
+    assert "astro-ph.GA" in target.categories
 
 
-def test_fetch_cutoff_applied(monkeypatch):
-    """The old paper (96h ago) must not appear when lookback_hours=24."""
-    monkeypatch.setattr(fetch_module, "_fetch_url", _make_fetch_url_mock(_FEED_XML.encode()))
-    monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
-    papers = fetch_recent_papers(["astro-ph.CO"], lookback_hours=24)
+def test_fetch_cross_listing_kept(monkeypatch):
+    papers = _fetch_main_feed(monkeypatch)
+    ids = {p.arxiv_id for p in papers}
+    assert "2606.05678" in ids
+
+
+def test_fetch_replacements_skipped(monkeypatch):
+    """'replace' and 'replace-cross' items must not become papers."""
+    papers = _fetch_main_feed(monkeypatch)
     ids = {p.arxiv_id for p in papers}
     assert "2506.99999" not in ids
+    assert "2505.11111" not in ids
+
+
+def test_fetch_missing_announce_type_kept_conservatively(monkeypatch):
+    """An item with no determinable announce type is never silently dropped."""
+    papers = _fetch_main_feed(monkeypatch)
+    ids = {p.arxiv_id for p in papers}
+    assert "2606.07777" in ids
 
 
 def test_fetch_dedupe_across_categories(monkeypatch):
@@ -240,13 +297,12 @@ def test_fetch_dedupe_across_categories(monkeypatch):
 
     monkeypatch.setattr(fetch_module, "_fetch_url", _rotating_feed)
     monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
-    papers = fetch_recent_papers(["astro-ph.CO", "astro-ph.GA"], lookback_hours=24)
+    papers = fetch_announced_papers(["astro-ph.CO", "astro-ph.GA"])
     ids = [p.arxiv_id for p in papers]
-    # 2606.01234 should appear exactly once
     assert ids.count("2606.01234") == 1
 
 
 def test_fetch_raises_on_empty_categories(monkeypatch):
     monkeypatch.setattr(fetch_module.time, "sleep", lambda s: None)
     with pytest.raises(ValueError, match="non-empty"):
-        fetch_recent_papers([], lookback_hours=24)
+        fetch_announced_papers([])

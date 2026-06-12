@@ -3,20 +3,23 @@
 Runnable as a module::
 
     python -m arxaudio.pipeline                  # full daily run
-    python -m arxaudio.pipeline --dry-run        # fetch+filter+process, no TTS/email
+    python -m arxaudio.pipeline --dry-run        # fetch+rank+process, no TTS/email
     python -m arxaudio.pipeline --no-email        # build the MP3 but don't send it
 
 Flow (see idea.md / PLAN.md):
-    load settings → read preferences.md → fetch recent arXiv papers →
-    LLM-filter against preferences → cap to MAX_PAPERS → LLM-clean math notation →
-    TTS into one MP3 → email it.
+    load settings → read preferences.md → fetch the papers arXiv announced
+    today (daily RSS mailing) →
+    rank all titles by relevance in ONE LLM call → top N (MAX_PAPERS) get
+    LLM-clean math + TTS into one MP3, the next N are listed email-only →
+    email it.
 
 Error policy (idea.md):
     * Systemic failures exit nonzero so GitHub Actions surfaces a real problem:
       arXiv unreachable, ollama server/model missing, SMTP auth failure when the
       user clearly intended email.
     * Per-paper issues never kill the run — the stage modules already isolate
-      those (filter/process/audio each guard per paper).
+      those (rank/process/audio each guard against failure; rank never loses a
+      paper).
 
 Backends are constructed through tiny registry factories (:func:`make_llm`,
 :func:`make_tts`) so a future fine-tuned model or a different TTS engine is a
@@ -35,8 +38,8 @@ from pathlib import Path
 import arxaudio.audio as audio
 import arxaudio.emailer as emailer
 import arxaudio.fetch as fetch
-import arxaudio.filter as filter_stage
 import arxaudio.process as process
+import arxaudio.rank as rank_stage
 from arxaudio.llm.base import LLMBackend, LLMError
 from arxaudio.llm.ollama_backend import OllamaBackend
 from arxaudio.models import Paper
@@ -113,8 +116,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="arxaudio",
         description=(
-            "Fetch new arXiv papers, LLM-filter by your preferences, clean math "
-            "notation for speech, synthesize one MP3, and email it."
+            "Fetch new arXiv papers, rank them against your preferences in one "
+            "LLM call, clean math notation for speech on the top picks, "
+            "synthesize one MP3, and email it (with the next picks listed)."
         ),
     )
     p.add_argument(
@@ -149,19 +153,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override MAX_PAPERS (0 = unlimited).",
     )
-    p.add_argument(
-        "--lookback-hours",
-        type=int,
-        metavar="N",
-        default=None,
-        help="Override LOOKBACK_HOURS.",
-    )
-
     # Stage-skipping flags (debugging / testing)
     p.add_argument(
-        "--no-filter",
+        "--no-rank",
+        "--no-filter",  # backwards-compatible alias for the old flag name
+        dest="no_rank",
         action="store_true",
-        help="Skip the LLM relevance filter (keep every fetched paper).",
+        help="Skip the LLM ranking; use feed (arrival) order.",
     )
     p.add_argument(
         "--no-llm-clean",
@@ -177,8 +175,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help=(
-            "Fetch + filter + process only; print what would be synthesized and "
-            "exit. No TTS, no email."
+            "Fetch + rank + process only; print what would be synthesized and "
+            "the email-only extras, then exit. No TTS, no email."
         ),
     )
     return p
@@ -208,22 +206,36 @@ def _read_preferences(path: Path) -> str:
         ) from exc
 
 
-def _apply_cap(papers: list[Paper], max_papers: int) -> list[Paper]:
-    """Trim kept papers to ``max_papers`` (0 = unlimited). Mutates keep flags.
+def _split_ranked(
+    ranked: list[Paper], max_papers: int
+) -> tuple[list[Paper], list[Paper]]:
+    """Split a relevance-ordered list into (audio papers, email-only extras).
 
-    fetch returns most-recent-first, so the cap keeps the freshest papers.
-    Papers dropped by the cap have ``keep`` cleared so downstream stages (which
-    all key off ``keep``) ignore them consistently.
+    ``max_papers`` (= MAX_PAPERS, ``n``) is the audio budget. With ``n == 0``
+    (unlimited) every ranked paper gets audio and there are no extras. Otherwise
+    the top ``n`` get audio and the next ``n`` (ranks N+1..2N) are listed in the
+    email only. Sets ``keep`` to True on audio papers and False on everything
+    else, since process/audio (and their tests) key off ``keep``.
     """
-    kept = [p for p in papers if p.keep]
-    if max_papers and len(kept) > max_papers:
-        for paper in kept[max_papers:]:
-            paper.keep = False
+    if max_papers and len(ranked) > max_papers:
+        audio_papers = ranked[:max_papers]
+        extras = ranked[max_papers : 2 * max_papers]
         logger.info(
-            "Capped kept papers from %d to MAX_PAPERS=%d.", len(kept), max_papers
+            "Ranked %d papers: top %d -> audio, next %d -> email-only.",
+            len(ranked),
+            len(audio_papers),
+            len(extras),
         )
-        kept = kept[:max_papers]
-    return kept
+    else:
+        audio_papers = list(ranked)
+        extras = []
+
+    for paper in audio_papers:
+        paper.keep = True
+    for paper in ranked:
+        if paper not in audio_papers:
+            paper.keep = False
+    return audio_papers, extras
 
 
 def _regex_only_clean(papers: list[Paper]) -> None:
@@ -248,9 +260,6 @@ def run(args: argparse.Namespace) -> int:
     """Execute one pipeline run. Returns a process exit code."""
     # --- Load settings --------------------------------------------------
     settings = load_settings(args.config)
-    if args.lookback_hours is not None:
-        settings.lookback_hours = args.lookback_hours
-        logger.info("Override: lookback_hours=%d", settings.lookback_hours)
     if args.max_papers is not None:
         settings.max_papers = args.max_papers
         logger.info("Override: max_papers=%d", settings.max_papers)
@@ -262,16 +271,13 @@ def run(args: argparse.Namespace) -> int:
 
     output_path = Path(args.output) if args.output else _default_output()
 
-    needs_llm = not (args.no_filter and args.no_llm_clean)
+    needs_llm = not (args.no_rank and args.no_llm_clean)
 
     # --- Fetch ----------------------------------------------------------
     # A RuntimeError here (arXiv unreachable) is systemic; let it propagate.
-    papers = fetch.fetch_recent_papers(
-        settings.categories,
-        lookback_hours=settings.lookback_hours,
-    )
+    papers = fetch.fetch_announced_papers(settings.categories)
     if not papers:
-        logger.info("nothing new today — no papers in the look-back window. Exiting.")
+        logger.info("nothing new today — no papers in today's mailing. Exiting.")
         return 0
     logger.info("Fetched %d papers.", len(papers))
 
@@ -287,26 +293,37 @@ def run(args: argparse.Namespace) -> int:
                 logger.error("LLM backend health check failed: %s", exc)
                 return 1
 
-    # --- Filter ---------------------------------------------------------
-    if args.no_filter:
-        for paper in papers:
-            paper.keep = True
-        logger.info("Filter skipped (--no-filter): keeping all %d papers.", len(papers))
+    # --- Rank -----------------------------------------------------------
+    # One LLM call orders all titles by relevance. We skip it (and use feed
+    # order) when:
+    #   * --no-rank is set, or
+    #   * MAX_PAPERS is a real cap and we fetched no more than that many papers
+    #     — ranking couldn't change membership and there are no email-only
+    #     extras to order, so the call would only reshuffle audio order.
+    # When MAX_PAPERS == 0 (unlimited) we still rank, so audio order reflects
+    # relevance, unless --no-rank says otherwise.
+    n = settings.max_papers
+    skip_rank = args.no_rank or (n and len(papers) <= n)
+    if skip_rank:
+        ranked = list(papers)
+        reason = "--no-rank" if args.no_rank else f"fetched <= MAX_PAPERS={n}"
+        logger.info("Ranking skipped (%s): using arrival order.", reason)
     else:
         assert llm is not None
-        filter_stage.filter_papers(papers, llm, preferences)
+        ranked = rank_stage.rank_papers(papers, llm, preferences)
 
-    # --- Cap ------------------------------------------------------------
-    kept = _apply_cap(papers, settings.max_papers)
-    logger.info("%d papers kept after filter/cap.", len(kept))
+    # --- Split into audio papers + email-only extras --------------------
+    kept, extras = _split_ranked(ranked, n)
 
     if not kept:
-        logger.info("No papers survived filtering today. Nothing to synthesize.")
+        logger.info("No papers to synthesize today.")
         return 0
 
     # One-line-per-paper digest record (doubles as the Actions log digest).
     for paper in kept:
-        logger.info("KEEP %s — %s", paper.arxiv_id, paper.title)
+        logger.info("AUDIO %s — %s", paper.arxiv_id, paper.title)
+    for paper in extras:
+        logger.info("EMAIL-ONLY %s — %s", paper.arxiv_id, paper.title)
 
     # --- Process (math cleanup) -----------------------------------------
     if args.no_llm_clean:
@@ -326,6 +343,13 @@ def run(args: argparse.Namespace) -> int:
                   f"{' et al' if len(paper.authors) > 1 else ''}")
             abstract = paper.clean_abstract or paper.abstract
             print(f"  ABSTRACT: {abstract}")
+        if extras:
+            print(f"\nEmail-only ({len(extras)} more, listed but not synthesized):")
+            for i, paper in enumerate(extras, start=1):
+                byline = paper.first_author + (
+                    " et al" if len(paper.authors) > 1 else ""
+                )
+                print(f"  {i}. {paper.title} — {byline} — {paper.url}")
         logger.info("Dry run complete (no TTS, no email).")
         return 0
 
@@ -373,9 +397,10 @@ def run(args: argparse.Namespace) -> int:
             "SMTP not configured; skipping email. Audio saved at %s", mp3_path
         )
     else:
-        titles = [p.clean_title or p.title for p in kept]
         try:
-            emailer.send_digest(settings, mp3_path, n_papers=len(kept), paper_titles=titles)
+            emailer.send_digest(
+                settings, mp3_path, audio_papers=kept, extra_papers=extras
+            )
             emailed = True
         except Exception as exc:  # SMTP auth/connect/etc. are systemic.
             logger.error("Failed to send digest email: %s", exc)
@@ -383,9 +408,10 @@ def run(args: argparse.Namespace) -> int:
 
     # --- Summary --------------------------------------------------------
     logger.info(
-        "Done. fetched=%d kept=%d audio=%s (%.1f MB) emailed=%s",
+        "Done. fetched=%d audio=%d email-only=%d mp3=%s (%.1f MB) emailed=%s",
         len(papers),
         len(kept),
+        len(extras),
         mp3_path,
         audio_mb,
         emailed,

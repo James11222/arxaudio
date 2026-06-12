@@ -16,8 +16,9 @@ class Paper:
     Fields set by fetch:
         arxiv_id, title, abstract, authors, categories, published
 
-    Fields set by filter:
-        keep (None = not yet filtered)
+    Fields set by rank (the pipeline's split after relevance ranking):
+        keep (None = not yet ranked; True = selected for audio; False = not
+        selected — either an email-only extra or beyond the 2N window)
 
     Fields set by process (only for kept papers):
         clean_title, clean_abstract
@@ -37,6 +38,10 @@ class Paper:
     @property
     def first_author(self) -> str:
         return self.authors[0] if self.authors else "unknown authors"
+
+    @property
+    def url(self) -> str:
+        return f"https://arxiv.org/abs/{self.arxiv_id}"
 
     def spoken_text(self) -> str:
         """The full text read aloud for this paper."""

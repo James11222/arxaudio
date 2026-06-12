@@ -32,7 +32,6 @@ TTS_VOICE = "en-GB-RyanNeural"
 MAX_MB = 15
 PAUSE_SECONDS = 0.8
 MAX_PAPERS = 10
-LOOKBACK_HOURS = 48
 EMAIL_SUBJECT_PREFIX = "My Digest"
 """
 
@@ -74,13 +73,6 @@ def test_custom_max_papers(tmp_path, monkeypatch):
     cfg = _write_config(tmp_path, CUSTOM_CONFIG)
     settings = load_settings(cfg)
     assert settings.max_papers == 10
-
-
-def test_custom_lookback_hours(tmp_path, monkeypatch):
-    monkeypatch.delenv("SMTP_HOST", raising=False)
-    cfg = _write_config(tmp_path, CUSTOM_CONFIG)
-    settings = load_settings(cfg)
-    assert settings.lookback_hours == 48
 
 
 def test_custom_email_subject_prefix(tmp_path, monkeypatch):
@@ -133,14 +125,7 @@ def test_default_max_papers(tmp_path, monkeypatch):
     monkeypatch.delenv("SMTP_HOST", raising=False)
     cfg = _write_config(tmp_path, MINIMAL_CONFIG)
     settings = load_settings(cfg)
-    assert settings.max_papers == 0
-
-
-def test_default_lookback_hours(tmp_path, monkeypatch):
-    monkeypatch.delenv("SMTP_HOST", raising=False)
-    cfg = _write_config(tmp_path, MINIMAL_CONFIG)
-    settings = load_settings(cfg)
-    assert settings.lookback_hours == 24
+    assert settings.max_papers == 10
 
 
 # ---------------------------------------------------------------------------

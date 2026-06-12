@@ -1,9 +1,10 @@
 name: arxaudio daily digest
 
 # -----------------------------------------------------------------------------
-# Runs the full arxaudio pipeline once a day: fetch new arXiv papers, filter them
-# against preferences.md with a tiny local LLM (ollama), clean math notation for
-# speech, synthesize one MP3, and email it.
+# Runs the full arxaudio pipeline once a day: fetch the papers arXiv announced
+# that day (daily RSS mailing), rank them
+# by relevance against preferences.md with a tiny local LLM (ollama), clean math
+# notation for speech, synthesize one MP3 for the top papers, and email it.
 #
 # The model name is read from config.py at runtime (single source of truth) so
 # the cache key and `ollama pull` always agree with what the pipeline will use.
@@ -18,11 +19,6 @@ on:
     - cron: "30 10 * * 1-5"
   workflow_dispatch:
     inputs:
-      lookback_hours:
-        description: "How many hours back to fetch (overrides config.py LOOKBACK_HOURS)."
-        required: false
-        type: string
-        default: ""
       skip_email:
         description: "Build the audio but do not send the email."
         required: false
@@ -134,9 +130,6 @@ jobs:
         run: |
           ARGS=()
           # workflow_dispatch optional inputs → CLI flags.
-          if [ -n "${{ github.event.inputs.lookback_hours }}" ]; then
-            ARGS+=(--lookback-hours "${{ github.event.inputs.lookback_hours }}")
-          fi
           if [ "${{ github.event.inputs.skip_email }}" = "true" ]; then
             ARGS+=(--no-email)
           fi
