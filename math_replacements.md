@@ -120,18 +120,18 @@ they match whether or not the LaTeX command survived earlier passes.
 
 | Match | Spoken |
 |-------|--------|
-| `\geq` | greater than or equal to |
-| `\geqslant` | greater than or equal to |
-| `\leq` | less than or equal to |
-| `\leqslant` | less than or equal to |
-| `\gg` | much greater than |
-| `\ll` | much less than |
-| `\neq` | not equal to |
-| `\equiv` | is equivalent to |
-| `\approx` | approximately equal to |
-| `\simeq` | approximately equal to |
-| `\sim` | approximately |
-| `\propto` | proportional to |
+| `\geq` | ` greater than or equal to ` |
+| `\geqslant` | ` greater than or equal to ` |
+| `\leq` | ` less than or equal to ` |
+| `\leqslant` | ` less than or equal to ` |
+| `\gg` | ` much greater than ` |
+| `\ll` | ` much less than ` |
+| `\neq` | ` not equal to ` |
+| `\equiv` | ` is equivalent to ` |
+| `\approx` | ` approximately equal to ` |
+| `\simeq` | ` approximately equal to ` |
+| `\sim` | ` approximately ` |
+| `\propto` | ` proportional to ` |
 | `\in` | is an element of |
 | `\notin` | is not an element of |
 | `\subset` | is a subset of |
@@ -155,11 +155,11 @@ they match whether or not the LaTeX command survived earlier passes.
 
 | Match | Spoken |
 |-------|--------|
-| `\pm` | plus or minus |
-| `\mp` | minus or plus |
-| `\times` | times |
-| `\cdot` | times |
-| `\div` | divided by |
+| `\pm` | ` plus or minus ` |
+| `\mp` | ` minus or plus ` |
+| `\times` | ` times ` |
+| `\cdot` | ` times ` |
+| `\div` | ` divided by ` |
 | `\infty` | infinity |
 | `\partial` | partial |
 | `\nabla` | del |
@@ -201,6 +201,9 @@ they match whether or not the LaTeX command survived earlier passes.
 | `R_sun` | solar radii |
 | `H_0` | H naught |
 | `H_{0}` | H naught |
+| `\msun` | solar masses |
+| `\lsun` | solar luminosities |
+| `\kms` | kilometers per second |
 
 ---
 
@@ -213,6 +216,11 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
+| `\\texttt\{([^{}]*)\}` | \1 | `\texttt{TUNER}` -> TUNER |
+| `\\textsc\{([^{}]*)\}` | \1 | `\textsc{i}` -> i |
+| `\\textrm\{([^{}]*)\}` | \1 | `\textrm{abc}` -> abc |
+| `\\textit\{([^{}]*)\}` | \1 | `\textit{abc}` -> abc |
+| `\\emph\{([^{}]*)\}` | \1 | `\emph{abc}` -> abc |
 | `\\text\{([^{}]*)\}` | \1 | `\text{abc}` -> abc |
 | `\\mathrm\{([^{}]*)\}` | \1 | `\mathrm{Mpc}` -> Mpc |
 | `\\mathbf\{([^{}]*)\}` | \1 | `\mathbf{x}` -> x |
@@ -336,8 +344,11 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `([A-Za-z])\^\{3\}` | \1 cubed | `x^{3}` -> x cubed |
 | `([A-Za-z])\^\{(-?\w+)\}` | \1 to the \2 | `x^{k}` -> x to the k |
 | `([A-Za-z])\^(-?\w+)` | \1 to the \2 | `x^k` -> x to the k |
+| `(\d+(?:\.\d+)?)\^\{([^{}]+)\}` | \1 to the \2 | `1.8^{+1.0}` -> 1.8 to the +1.0 |
+| `(\d+(?:\.\d+)?)\^(-?\w+)` | \1 to the \2 | `1.8^2` -> 1.8 to the 2 |
 | `([A-Za-z])_\{([^{}]+)\}` | \1 sub \2 | `x_{i,j}` -> x sub i,j |
 | `([A-Za-z])_([A-Za-z0-9])` | \1 sub \2 | `x_i` -> x sub i |
+| `_\{([^{}]+)\}` | sub \1 | `_{i,j}` -> sub i,j (no leading letter) |
 
 ### Symbol cleanup
 
@@ -349,3 +360,4 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `([A-Za-z0-9])\s*=\s*([A-Za-z0-9])` | \1 equals \2 | `n = 3` -> n equals 3 |
 | `\\,` |  | `\,` (thin space) -> removed |
 | `\\;` |  | `\;` -> removed |
+| `\^` | ` to the power of ` | leftover `^` -> to the power of |

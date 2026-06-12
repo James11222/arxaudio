@@ -84,10 +84,14 @@ _LLM_SYSTEM = """\
 You convert science text into a form a text-to-speech engine can read aloud.
 
 RULES — follow exactly:
-- Replace only math symbols, LaTeX, and units that are hard to pronounce with
-  plain spoken English words.
-- Keep every word, sentence, and number otherwise EXACTLY as given.
-- Do NOT paraphrase, summarize, reorder, translate, add, or remove anything.
+- Replace math symbols, LaTeX commands, and units that are hard to pronounce
+  with plain spoken English words.
+- Remove or replace any remaining LaTeX commands (e.g. \\textsc, \\texttt,
+  \\msun, \\lsun, \\kms) that would sound unnatural when read aloud. Spell out
+  what they represent if meaningful, otherwise omit them.
+- Keep every ordinary word, sentence, and number otherwise EXACTLY as given.
+- Do NOT paraphrase, summarize, reorder, translate, add, or remove content
+  beyond what is needed for natural speech.
 - Do NOT add commentary. Output ONLY the converted text, nothing else.
 
 Examples:
@@ -215,7 +219,7 @@ def _load_rules(
 # Final cleanup (applied after all table rules)
 # ---------------------------------------------------------------------------
 
-_BRACE_MACRO_RE = re.compile(r"\\(?:text|mathrm|mathbf|mathcal|mathit|mathsf)\{([^{}]*)\}")
+_BRACE_MACRO_RE = re.compile(r"\\(?:texttt|textsc|textrm|textit|emph|text|mathrm|mathbf|mathcal|mathit|mathsf)\{([^{}]*)\}")
 _REMAINING_DOLLAR_RE = re.compile(r"\$")
 _LEFTOVER_BACKSLASH_CMD_RE = re.compile(r"\\(?:left|right|!|,|;|:|quad|qquad)")
 _BRACE_RE = re.compile(r"[{}]")
