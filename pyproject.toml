@@ -17,6 +17,9 @@ dev = [
     "pytest>=8",
 ]
 
+[project.scripts]
+arxaudio-process = "arxaudio.process:_cli_main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
