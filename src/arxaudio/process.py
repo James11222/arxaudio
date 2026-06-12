@@ -18,8 +18,10 @@ it by editing markdown — see that file's header for the column contract.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import re
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -82,10 +84,14 @@ _LLM_SYSTEM = """\
 You convert science text into a form a text-to-speech engine can read aloud.
 
 RULES — follow exactly:
-- Replace only math symbols, LaTeX, and units that are hard to pronounce with
-  plain spoken English words.
-- Keep every word, sentence, and number otherwise EXACTLY as given.
-- Do NOT paraphrase, summarize, reorder, translate, add, or remove anything.
+- Replace math symbols, LaTeX commands, and units that are hard to pronounce
+  with plain spoken English words.
+- Remove or replace any remaining LaTeX commands (e.g. \\textsc, \\texttt,
+  \\msun, \\lsun, \\kms) that would sound unnatural when read aloud. Spell out
+  what they represent if meaningful, otherwise omit them.
+- Keep every ordinary word, sentence, and number otherwise EXACTLY as given.
+- Do NOT paraphrase, summarize, reorder, translate, add, or remove content
+  beyond what is needed for natural speech.
 - Do NOT add commentary. Output ONLY the converted text, nothing else.
 
 Examples:
@@ -213,7 +219,7 @@ def _load_rules(
 # Final cleanup (applied after all table rules)
 # ---------------------------------------------------------------------------
 
-_BRACE_MACRO_RE = re.compile(r"\\(?:text|mathrm|mathbf|mathcal|mathit|mathsf)\{([^{}]*)\}")
+_BRACE_MACRO_RE = re.compile(r"\\(?:texttt|textsc|textrm|textit|emph|text|mathrm|mathbf|mathcal|mathit|mathsf)\{([^{}]*)\}")
 _REMAINING_DOLLAR_RE = re.compile(r"\$")
 _LEFTOVER_BACKSLASH_CMD_RE = re.compile(r"\\(?:left|right|!|,|;|:|quad|qquad)")
 _BRACE_RE = re.compile(r"[{}]")
@@ -395,3 +401,52 @@ def process_papers(papers: list[Paper], llm: LLMBackend) -> None:
                 paper.clean_title = apply_replacements(paper.title)
             if not paper.clean_abstract:
                 paper.clean_abstract = apply_replacements(paper.abstract)
+
+
+# ---------------------------------------------------------------------------
+# CLI: process a plain text file
+# ---------------------------------------------------------------------------
+
+def _cli_main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(
+        prog="arxaudio-process",
+        description="Run the math-notation → spoken-text pass on a plain text file.",
+    )
+    p.add_argument("input", metavar="INPUT", help="Path to input text file.")
+    p.add_argument(
+        "output",
+        metavar="OUTPUT",
+        nargs="?",
+        default=None,
+        help="Path to write cleaned text (default: print to stdout).",
+    )
+    p.add_argument(
+        "--table",
+        metavar="PATH",
+        default=None,
+        help="Override path to math_replacements.md.",
+    )
+    args = p.parse_args(argv)
+
+    try:
+        text = Path(args.input).read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    cleaned = apply_replacements(text, table_path=args.table)
+
+    if args.output:
+        try:
+            Path(args.output).write_text(cleaned, encoding="utf-8")
+        except OSError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+    else:
+        print(cleaned)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(_cli_main())
