@@ -451,6 +451,59 @@ def test_no_remaining_dollars():
     assert "$" not in result
 
 
+def test_unlisted_latex_command_never_spoken_as_backslash():
+    """A command not in the table is dropped, never read as 'backslash ...'.
+
+    This is the safety net that prevented benty abstracts (which use short-form
+    notation like \\le, \\ge, \\langle, and unlisted macros) from leaking raw
+    LaTeX into the TTS audio.
+    """
+    import re
+    text = r"with $\langle x \rangle \le 3$ and a $\frobnicate$ macro here"
+    result = ar(text)
+    assert not re.search(r"\\", result), f"stray backslash: {result!r}"
+    assert "{" not in result and "}" not in result and "$" not in result
+    # The short-form operator is spoken, not dropped.
+    assert "less than or equal to" in result
+
+
+def test_short_form_le_ge_spoken():
+    assert "less than or equal to" in ar(r"$M \le 5$")
+    assert "greater than or equal to" in ar(r"$M \ge 5$")
+
+
+def test_number_glued_to_unit_gets_spaced():
+    """`3pc` / `3.4Myr` style gluing is split so the unit is spoken in full."""
+    assert "3 parsecs" in ar("a 3pc resolution")
+    assert "3.4 megayears" in ar("a 3.4Myr delay")
+    assert "5 kiloparsecs" in ar("within 5kpc")
+    assert "100 gigahertz" in ar("at 100GHz")
+
+
+def test_number_unit_spacing_leaves_identifiers_alone():
+    """Survey names / identifiers like 2MASS, 6dF, 3D must NOT be split."""
+    result = ar("the 2MASS and 6dF surveys mapped 3D structure")
+    assert "2MASS" in result and "6dF" in result and "3D" in result
+
+
+def test_escaped_pipe_in_regex_cell_parsed():
+    """A regex table cell may use `\\|` alternation (parser honors the escape).
+
+    The number→unit spacing rule in math_replacements.md relies on this; if the
+    parser split on the escaped pipes the rule would be silently dropped.
+    """
+    from arxaudio.process import _split_row, _strip_cell
+    cells = _split_row(r"| `(?:Mpc\|kpc)` | \1 | doc |")
+    assert cells is not None and len(cells) == 3
+    assert _strip_cell(cells[0]) == "(?:Mpc|kpc)"
+
+
+def test_stellar_subscript_star_spoken():
+    """`M_\\star` (and the braced form) reads 'M sub star', not a dropped token."""
+    assert "sub star" in ar(r"$M_\star > 10$")
+    assert "sub star" in ar(r"$M_{\star} > 10$")
+
+
 # ---------------------------------------------------------------------------
 # 16. Idempotency-ish sanity (running twice gives same result as once for
 #     already-clean text)
@@ -536,6 +589,27 @@ def test_clean_paper_chatter_sure_falls_back():
     llm = FakeLLM(responses=[chatter, chatter])
     clean_paper(paper, llm)
     assert paper.clean_abstract == regex_version
+
+
+def test_clean_paper_relatexified_output_falls_back():
+    """LLM output that re-introduces LaTeX markers → regex-only version kept.
+
+    A tiny model sometimes "re-LaTeXifies" the already-clean text it is handed
+    (echoing the few-shot example inputs), emitting ``$...$`` / brace / backslash
+    notation that is close enough in length to pass the drift check. That would
+    make TTS read "dollar ... backslash ..." aloud, so it must be rejected.
+    """
+    paper = _make_paper("We measure the halo mass at high redshift.")
+    regex_version = apply_replacements(paper.abstract)
+    # Same prose length, but the model put math delimiters back in.
+    relatexified = regex_version.replace("mass", "mass $M_{200}$")
+    llm = FakeLLM(responses=[regex_version, relatexified])
+    clean_paper(paper, llm)
+    assert paper.clean_abstract == regex_version
+    # Guarantee: no math delimiters survive into the spoken text.
+    assert "$" not in paper.clean_abstract
+    assert "\\" not in paper.clean_abstract
+    assert "{" not in paper.clean_abstract and "}" not in paper.clean_abstract
 
 
 def test_clean_paper_llm_error_falls_back():

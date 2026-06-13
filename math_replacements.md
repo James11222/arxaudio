@@ -161,10 +161,14 @@ they match whether or not the LaTeX command survived earlier passes.
 |-------|--------|
 | `\geq` | ` greater than or equal to ` |
 | `\geqslant` | ` greater than or equal to ` |
+| `\ge` | ` greater than or equal to ` |
 | `\gtrsim` | ` greater than or approximately ` |
 | `\leq` | ` less than or equal to ` |
 | `\leqslant` | ` less than or equal to ` |
+| `\le` | ` less than or equal to ` |
 | `\lesssim` | ` less than or approximately ` |
+| `\langle` | ` the average of ` |
+| `\rangle` | ` ` |
 | `\gg` | ` much greater than ` |
 | `\ll` | ` much less than ` |
 | `\neq` | ` not equal to ` |
@@ -266,8 +270,10 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\\mathrm\{([^{}]*)\}` | \1 | `\mathrm{Mpc}` -> Mpc |
 | `\\mathbf\{([^{}]*)\}` | \1 | `\mathbf{x}` -> x |
 | `\\mathcal\{([^{}]*)\}` | \1 | `\mathcal{L}` -> L |
-| `\\rm\s+` |  | `\rm Mpc` -> Mpc |
+| `\\rm\s+` | ` ` | `\rm Mpc` -> ` Mpc` (keep the space, don't glue) |
+| `\\star\b` | star | `M_\star` -> M sub star (stellar) |
 | `\\[,;:!]` | ` ` | `\,` (thin space) -> space |
+| `\\\s` | ` ` | `\ ` (forced space) -> space |
 | `\$([^$]*)\$` | \1 | `$x$` -> x (strip math delimiters early) |
 | `\$` |  | leftover `$` -> removed |
 
@@ -315,6 +321,17 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\\sin\b` | sin | bare `\sin` without parens |
 | `\\cos\b` | cos | bare `\cos` without parens |
 | `\\tan\b` | tan | bare `\tan` without parens |
+
+### Separate a number glued to a unit (run before the unit rules below)
+
+LaTeX often glues a value to its unit (`3pc`, `3.4Myr`, `2000km`) with no space,
+which then defeats the `\b…\b` word-boundary unit rules further down. Insert a
+single space between the trailing digit and a *known* unit token only — so survey
+names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
+
+| Regex | Replacement | Example |
+|-------|-------------|---------|
+| `(\d)\s*(?=(?:Mpc\|kpc\|Gpc\|pc\|km\|Gyr\|Myr\|kyr\|yr\|AU\|TeV\|GeV\|MeV\|keV\|eV\|GHz\|MHz\|kHz\|Hz\|arcsec\|arcmin\|mas\|mag\|dex)\b)` | `\1 ` | `3.4Myr` -> 3.4 Myr |
 
 ### Units with exponents (cubed/squared first, then bare; word boundaries)
 

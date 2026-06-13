@@ -38,6 +38,16 @@ _DEFAULT_TABLE_PATH = Path(__file__).resolve().parents[2] / "math_replacements.m
 # it as paraphrasing/chatter. 0.20 == 20%.
 _LENGTH_TOLERANCE = 0.20
 
+# A correct spoken-text polish contains NO math delimiters — the deterministic
+# pass already stripped every ``$``, brace, and hard-to-pronounce command. A
+# tiny model, primed by the few-shot examples (whose *inputs* are full of raw
+# LaTeX like ``$\sigma_8$``), sometimes "re-LaTeXifies" the clean text it was
+# handed, emitting ``$10^{10}$``-style notation that is close enough in length
+# to slip past the drift check. TTS would then read those out as "dollar ...
+# backslash ...". So any of these markers in the polish output means the model
+# misbehaved, and we fall back to the (guaranteed-clean) regex baseline.
+_LATEX_MARKER_RE = re.compile(r"[\\${}]")
+
 # Prefixes that betray a chatty tiny model instead of a clean rewrite.
 _CHATTER_PREFIXES = (
     "here is",
@@ -118,13 +128,20 @@ def _strip_cell(cell: str) -> str:
     return cell.replace("\\|", "|")
 
 
+# Split on a pipe that is NOT backslash-escaped, so a regex cell may contain a
+# literal `\|` alternation (e.g. `(?:Mpc\|kpc\|pc)`). _strip_cell then turns the
+# surviving `\|` back into `|`. This honors the "write a literal pipe as \|"
+# contract documented in math_replacements.md.
+_UNESCAPED_PIPE_RE = re.compile(r"(?<!\\)\|")
+
+
 def _split_row(line: str) -> list[str] | None:
     """Split a markdown table row into cells, or None if it isn't a table row."""
     line = line.strip()
     if not line.startswith("|"):
         return None
     # Drop the leading/trailing empty cells produced by the bounding pipes.
-    cells = line.split("|")[1:-1]
+    cells = _UNESCAPED_PIPE_RE.split(line)[1:-1]
     return [c.strip() for c in cells]
 
 
@@ -226,6 +243,17 @@ _BRACE_RE = re.compile(r"[{}]")
 _MULTISPACE_RE = re.compile(r"[ \t]{2,}")
 _SPACE_BEFORE_PUNCT_RE = re.compile(r"\s+([,.;:!?])")
 
+# Final safety net for LaTeX that slipped past every table rule (an unlisted
+# command like \langle, or a short-form operator not in the table). Without this
+# a stray "\foo" reaches TTS and is read aloud as "backslash foo". A subscript or
+# superscript onto such a survivor (e.g. "M_\star") is still spoken sensibly;
+# anything else is simply dropped. These run LAST, after all known notation has
+# already been converted to words, so they only ever fire on genuine leftovers.
+_SUBSCRIPT_CMD_RE = re.compile(r"_\\([A-Za-z]+)")
+_SUPERSCRIPT_CMD_RE = re.compile(r"\^\\([A-Za-z]+)")
+_LEFTOVER_LATEX_CMD_RE = re.compile(r"\\[A-Za-z]+")
+_STRAY_BACKSLASH_RE = re.compile(r"\\")
+
 
 def _final_cleanup(text: str) -> str:
     """Strip leftover delimiters/macros and normalize whitespace."""
@@ -237,6 +265,12 @@ def _final_cleanup(text: str) -> str:
     text = _LEFTOVER_BACKSLASH_CMD_RE.sub(" ", text)
     text = _REMAINING_DOLLAR_RE.sub("", text)
     text = _BRACE_RE.sub("", text)
+    # Safety net: convert/drop any LaTeX command that survived the table so no
+    # literal "backslash" is ever spoken (see the regexes above).
+    text = _SUBSCRIPT_CMD_RE.sub(r" sub \1", text)
+    text = _SUPERSCRIPT_CMD_RE.sub(r" to the \1", text)
+    text = _LEFTOVER_LATEX_CMD_RE.sub(" ", text)
+    text = _STRAY_BACKSLASH_RE.sub(" ", text)
     text = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", text)
     text = _MULTISPACE_RE.sub(" ", text)
     # Collapse runs of blank space across newlines but keep single spaces.
@@ -319,6 +353,10 @@ def _validate_llm_output(candidate: str, baseline: str) -> bool:
     drift = abs(len(candidate) - len(baseline)) / base_len
     if drift > _LENGTH_TOLERANCE:
         return False
+    # The polish must not reintroduce math delimiters the regex pass removed;
+    # if it did, TTS would read them aloud (see _LATEX_MARKER_RE).
+    if _LATEX_MARKER_RE.search(candidate):
+        return False
     return True
 
 
@@ -348,11 +386,15 @@ def _llm_polish(text: str, llm: LLMBackend, *, field: str, arxiv_id: str) -> str
     if _validate_llm_output(stripped, text):
         return stripped
 
+    reason = "leftover LaTeX markers" if _LATEX_MARKER_RE.search(stripped) else (
+        "chatter" if _looks_like_chatter(stripped) else "length/empty"
+    )
     logger.warning(
-        "process: LLM output for %s %s failed validation "
-        "(len %d vs %d), keeping regex-only version",
+        "process: LLM output for %s %s failed validation (%s; len %d vs %d), "
+        "keeping regex-only version",
         arxiv_id,
         field,
+        reason,
         len(stripped),
         len(text),
     )
