@@ -36,6 +36,7 @@ _DEFAULTS: dict[str, object] = {
     "OLLAMA_MODEL": "qwen2.5:0.5b",
     "TTS_BACKEND": "edge",
     "TTS_VOICE": "en-US-AndrewNeural",
+    "TTS_SPEED": 1.0,
     "MAX_MB": 20,
     "PAUSE_SECONDS": 1.2,
     "MAX_PAPERS": 10,
@@ -61,6 +62,7 @@ class Settings:
     # TTS
     tts_backend: str = "edge"
     tts_voice: str = "en-US-AndrewNeural"
+    tts_speed: float = 1.0
 
     # Audio
     max_mb: int = 20
@@ -192,6 +194,11 @@ def _validate(settings: Settings, config_path: Path) -> None:
         raise ValueError(
             f"PAUSE_SECONDS must be non-negative (got {settings.pause_seconds!r})."
         )
+    if settings.tts_speed <= 0:
+        raise ValueError(
+            f"TTS_SPEED must be a positive multiplier (got {settings.tts_speed!r}). "
+            "Use 1.0 for normal pace; e.g. 0.8 for slower, 1.5 for faster."
+        )
     if settings.max_papers < 0:
         raise ValueError(
             f"MAX_PAPERS must be 0 (unlimited) or a positive integer "
@@ -241,6 +248,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         ollama_model=str(get("OLLAMA_MODEL")),
         tts_backend=str(get("TTS_BACKEND")),
         tts_voice=str(get("TTS_VOICE")),
+        tts_speed=float(get("TTS_SPEED")),          # type: ignore[arg-type]
         max_mb=int(get("MAX_MB")),                     # type: ignore[arg-type]
         pause_seconds=float(get("PAUSE_SECONDS")),     # type: ignore[arg-type]
         max_papers=int(get("MAX_PAPERS")),             # type: ignore[arg-type]

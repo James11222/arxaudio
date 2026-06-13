@@ -78,7 +78,7 @@ _LLM_REGISTRY: dict[str, "callable[[Settings], LLMBackend]"] = {
 }
 
 _TTS_REGISTRY: dict[str, "callable[[Settings], TTSBackend]"] = {
-    "edge": lambda s: EdgeTTSBackend(default_voice=s.tts_voice),
+    "edge": lambda s: EdgeTTSBackend(default_voice=s.tts_voice, speed=s.tts_speed),
 }
 
 

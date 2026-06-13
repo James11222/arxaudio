@@ -259,6 +259,7 @@ All user-facing settings live in `config.py` at the repository root. Do not put 
 | `OLLAMA_MODEL`         | `"qwen2.5:0.5b"`                    | ollama model tag. The workflow reads this at runtime — change it here and CI follows automatically |
 | `TTS_BACKEND`          | `"edge"`                            | Which TTS backend to use. Currently `"edge"` (edge-tts); extensible via the registry        |
 | `TTS_VOICE`            | `"en-US-AndrewNeural"`              | Edge TTS voice identifier. Run `edge-tts --list-voices` to browse options                   |
+| `TTS_SPEED`            | `1.0`                               | Narration speed multiplier (`1.0` normal, `0.8` slower, `1.5`/`2.0` faster). Useful range ~0.5–2.0 |
 | `MAX_MB`               | `20`                                | Maximum MP3 size in megabytes. Audio is bitrate-stepped-down automatically if exceeded      |
 | `PAUSE_SECONDS`        | `1.2`                               | Silence gap in seconds between papers                                                        |
 | `MAX_PAPERS`           | `10`                                | Top N ranked papers get full audio; next N are listed in the email only. `0` means unlimited (all papers get audio, no email-only section) |
@@ -285,6 +286,8 @@ Both are markdown tables parsed by `process.py`. **Extend the pipeline by editin
 **Different arXiv categories:** Update `CATEGORIES` in `config.py`. That is the only change needed.
 
 **Different voice:** Run `edge-tts --list-voices` to see all available neural voices, then set `TTS_VOICE` in `config.py`. Good English options include `en-US-JennyNeural`, `en-GB-RyanNeural`, and `en-AU-NatashaNeural`.
+
+**Narration speed:** Set `TTS_SPEED` in `config.py` to a multiplier — `1.0` is normal, `0.8` slows it down, and `1.2`/`1.5`/`2.0` speed it up. It applies to every paper in the audio.
 
 **Larger or different ollama model:** Change `OLLAMA_MODEL` in `config.py`. The workflow reads that variable at runtime to set the cache key and run `ollama pull` — no changes to `daily.yml` are needed. Larger options like `qwen2.5:1.5b` or `llama3.2:1b` improve ranking quality at the cost of a larger cache and slower CI.
 

@@ -91,6 +91,12 @@ TTS_BACKEND: str = "edge"
 
 TTS_VOICE: str = "en-US-AndrewNeural"
 
+# TTS_SPEED: narration speed multiplier relative to the voice's normal pace.
+#   1.0  = normal,  0.8 = slower,  1.2 / 1.5 = faster,  2.0 = double speed.
+# Applied to every paper in the audio.  Useful range is roughly 0.5–2.0.
+
+TTS_SPEED: float = 1.2
+
 
 # ---------------------------------------------------------------------------
 # Audio output limits

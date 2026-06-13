@@ -29,6 +29,7 @@ LLM_BACKEND = "custom"
 OLLAMA_MODEL = "llama3.2:1b"
 TTS_BACKEND = "edge"
 TTS_VOICE = "en-GB-RyanNeural"
+TTS_SPEED = 1.5
 MAX_MB = 15
 PAUSE_SECONDS = 0.8
 MAX_PAPERS = 10
@@ -89,6 +90,13 @@ def test_custom_tts_voice(tmp_path, monkeypatch):
     assert settings.tts_voice == "en-GB-RyanNeural"
 
 
+def test_custom_tts_speed(tmp_path, monkeypatch):
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    cfg = _write_config(tmp_path, CUSTOM_CONFIG)
+    settings = load_settings(cfg)
+    assert abs(settings.tts_speed - 1.5) < 1e-9
+
+
 # ---------------------------------------------------------------------------
 # Defaults filled for missing keys
 # ---------------------------------------------------------------------------
@@ -105,6 +113,13 @@ def test_default_tts_voice(tmp_path, monkeypatch):
     cfg = _write_config(tmp_path, MINIMAL_CONFIG)
     settings = load_settings(cfg)
     assert settings.tts_voice == "en-US-AndrewNeural"
+
+
+def test_default_tts_speed(tmp_path, monkeypatch):
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    cfg = _write_config(tmp_path, MINIMAL_CONFIG)
+    settings = load_settings(cfg)
+    assert abs(settings.tts_speed - 1.0) < 1e-9
 
 
 def test_default_max_mb(tmp_path, monkeypatch):
@@ -143,6 +158,20 @@ def test_validation_error_negative_max_mb(tmp_path, monkeypatch):
     monkeypatch.delenv("SMTP_HOST", raising=False)
     cfg = _write_config(tmp_path, "CATEGORIES = ['astro-ph.CO']\nMAX_MB = -1\n")
     with pytest.raises(ValueError, match="MAX_MB"):
+        load_settings(cfg)
+
+
+def test_validation_error_zero_tts_speed(tmp_path, monkeypatch):
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    cfg = _write_config(tmp_path, "CATEGORIES = ['astro-ph.CO']\nTTS_SPEED = 0\n")
+    with pytest.raises(ValueError, match="TTS_SPEED"):
+        load_settings(cfg)
+
+
+def test_validation_error_negative_tts_speed(tmp_path, monkeypatch):
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    cfg = _write_config(tmp_path, "CATEGORIES = ['astro-ph.CO']\nTTS_SPEED = -1.0\n")
+    with pytest.raises(ValueError, match="TTS_SPEED"):
         load_settings(cfg)
 
 
