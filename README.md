@@ -40,6 +40,45 @@ Then set `LLM_BACKEND = "mymodel"` in `config.py`. Nothing else in the pipeline 
 
 ---
 
+## Alternative paper source: benty-fields.com
+
+By default arxaudio fetches papers from arXiv's RSS feeds and ranks them with the local LLM. If you have an account on [benty-fields.com](https://www.benty-fields.com), you can instead let **benty-fields' own machine-learning model** — trained on your personal reading and voting history — pick and rank the day's papers for you. Set one variable in `config.py`:
+
+```python
+PAPER_SOURCE: str = "benty"
+```
+
+When `PAPER_SOURCE = "benty"`, the **Fetch and Rank stages are both replaced** by a single authenticated scrape of your benty-fields daily page (the papers there are already sorted best-first by benty's ML personalization). Everything downstream — Process, TTS, Email — is identical:
+
+```
+benty-fields.com  ─(login + scrape, already ranked)─▶  Process ──▶ TTS ──▶ Email
+```
+
+What changes in this mode:
+
+- **`CATEGORIES` in `config.py` is ignored** — benty uses your account's own subscription settings instead.
+- **The LLM ranking step is skipped entirely** — benty's ranking is used as-is. (ollama is still used for the Process/LaTeX-cleanup step, unless you also pass `--no-llm-clean`.)
+- **Two new secrets are required:** your benty-fields login.
+
+| Secret name      | Description                                                        |
+|------------------|-------------------------------------------------------------------|
+| `BENTY_EMAIL`    | The email address you log in to benty-fields with                 |
+| `BENTY_PASSWORD` | Your benty-fields password — **use a unique password**, not one reused on other accounts, since it is stored as a CI secret |
+
+Add them under **Settings → Secrets and variables → Actions** just like the SMTP secrets. Optionally, `BENTY_BASE_URL` overrides the site root (defaults to `https://www.benty-fields.com`).
+
+> **A note on scraping:** this logs in to *your own* account and fetches one page per day — benty-fields' `robots.txt` permits it and the load is negligible. Because it scrapes rendered HTML (benty exposes no public API), it is inherently more fragile than the arXiv RSS path: if benty changes their page layout, this source may need updating. The arXiv source remains the robust default.
+
+Locally, set the same two environment variables before running:
+
+```bash
+export BENTY_EMAIL=you@example.com
+export BENTY_PASSWORD=your-benty-password
+python -m arxaudio.pipeline          # with PAPER_SOURCE="benty" in config.py
+```
+
+---
+
 ## Quick start: fork and run in GitHub Actions
 
 ### 1. Fork this repository
@@ -76,6 +115,8 @@ Add these five secrets:
 | `SMTP_USER`     | Your full email address                          |
 | `SMTP_PASSWORD` | Your SMTP password or app password               |
 | `EMAIL_TO`      | Recipient address (can be the same as `SMTP_USER`) |
+
+(If you use `PAPER_SOURCE = "benty"`, also add `BENTY_EMAIL` and `BENTY_PASSWORD` — see the [benty-fields section](#alternative-paper-source-benty-fieldscom).)
 
 **Gmail walkthrough (recommended):** Gmail requires an App Password rather than your regular account password.
 1. Go to your Google Account → Security → 2-Step Verification (enable it if not already on).
@@ -189,7 +230,9 @@ All user-facing settings live in `config.py` at the repository root. Do not put 
 
 | Variable               | Default                             | Description                                                                                  |
 |------------------------|-------------------------------------|----------------------------------------------------------------------------------------------|
-| `CATEGORIES`           | `["astro-ph.CO", "astro-ph.GA"]`    | arXiv categories to poll. See https://arxiv.org/category_taxonomy                           |
+| `PAPER_SOURCE`         | `"arxiv"`                           | Where papers come from: `"arxiv"` (RSS feeds + LLM ranking) or `"benty"` (benty-fields ML ranking; see the [benty-fields section](#alternative-paper-source-benty-fieldscom)). In `"benty"` mode `CATEGORIES` is ignored and `BENTY_EMAIL`/`BENTY_PASSWORD` env vars are required |
+| `BENTY_BASE_URL`       | `"https://www.benty-fields.com"`    | (benty mode only) Override the benty-fields site root. Rarely needed                          |
+| `CATEGORIES`           | `["astro-ph.CO", "astro-ph.GA"]`    | arXiv categories to poll (ignored when `PAPER_SOURCE="benty"`). See https://arxiv.org/category_taxonomy |
 | `LLM_BACKEND`          | `"ollama"`                          | Which LLM backend to use. Currently `"ollama"`; extensible via the registry in `pipeline.py` |
 | `OLLAMA_MODEL`         | `"qwen2.5:0.5b"`                    | ollama model tag. The workflow reads this at runtime — change it here and CI follows automatically |
 | `TTS_BACKEND`          | `"edge"`                            | Which TTS backend to use. Currently `"edge"` (edge-tts); extensible via the registry        |
@@ -243,6 +286,8 @@ Both are markdown tables parsed by `process.py`. **Extend the pipeline by editin
 | MP3 too large to email | The bitrate step-down is automatic (64k → 48k → 32k → 24k). If it is still over the limit, lower `MAX_PAPERS` in `config.py` to cap the number of papers per run. |
 | First Actions run takes 10–15 minutes | The ollama model is being downloaded and the cache is being populated. Subsequent runs restore from cache and are much faster. |
 | `edge-tts` synthesis failures | edge-tts requires an outbound network connection to Microsoft's servers. Transient failures are retried; persistent failures skip that paper and continue. Check the Actions log for details. |
+| `benty-fields login failed` | (benty mode) Wrong `BENTY_EMAIL`/`BENTY_PASSWORD`, or your account is locked. Verify the credentials by logging in through a browser. |
+| Benty mode fetches no/odd papers | benty scrapes rendered HTML; a site layout change can break parsing. Run locally with `--dry-run --verbose` to inspect. The arXiv source (`PAPER_SOURCE="arxiv"`) is the robust fallback. |
 | Pipeline exits 1 with no clear error | Run locally with `--verbose` for DEBUG-level logging. |
 
 ---
@@ -270,6 +315,7 @@ arxaudio/
 │   ├── models.py              # Paper dataclass — the contract between stages
 │   ├── settings.py            # Loads config.py + SMTP env vars into Settings
 │   ├── fetch.py               # arXiv RSS: papers announced today
+│   ├── benty.py               # ALT SOURCE: scrape benty-fields.com (already ranked)
 │   ├── rank.py                # LLM title ranking (one call for all papers)
 │   ├── process.py             # Math-notation → spoken text (regex + LLM)
 │   ├── audio.py               # Per-paper TTS segments → single MP3, size budget
@@ -296,6 +342,7 @@ arxaudio uses zero paid services and requires no API keys:
 - **ffmpeg** — open-source, installed via `apt` in CI.
 - **GitHub Actions** — the free tier (2,000 minutes/month for public repos, 500 minutes/month for private) is sufficient for a daily run.
 - **SMTP** — uses your own email account. App passwords are free.
+- **benty-fields.com** (optional source) — free; uses your own account login. One page request per day.
 
 If you find the project useful, please be a good citizen of the arXiv ecosystem: do not increase the request rate, and do not scrape bulk data beyond what the pipeline is designed for.
 

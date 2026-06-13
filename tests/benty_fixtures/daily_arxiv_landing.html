@@ -1,0 +1,508 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="author" content="">
+
+        <title>benty-fields - Papers</title>
+        
+    <meta name="description" content="Summary of the latest arxiv publications for the users selection.">
+
+
+        <link rel="shortcut icon" href="/static/favicon/favicon.ico" type="image/x-icon">
+        <link rel="apple-touch-icon" href="/static/favicon/apple-icon-152x152.png" type="image/png">
+        <link href="/static/include/main_combined.min.css" rel="stylesheet">
+
+        <!-- This is needed for the Patreon symbol in the benty-footer -->
+        <script src='https://kit.fontawesome.com/a076d05399.js'></script>
+        <!-- Adding Stripe.js automatically includes advanced fraud detection whenever your customers uses Checkout -->
+        <script src="https://js.stripe.com/v3/"></script>
+
+        <script type="text/javascript">
+            var $SCRIPT_ROOT = "";
+        </script>
+
+
+    </head>
+
+    <body>
+        <div id="feedback" style="z-index:10000000000000000000">
+            <div id="feedback-form" style='display:none;' class="col-xs-4 col-md-4 panel panel-default">
+                <form method="POST" action="/feedback" class="form panel-body">
+                    <div class="form-group">
+                        <input class="form-control" id="feedback-email" name="email"  value="James Sunseri" disabled  type="text">
+                    </div>
+                    <div class="form-group">
+                        <textarea class="form-control" id="feedback-message" name="message" required placeholder="Please write your feedback here..." rows="5"></textarea>
+                    </div>
+                    <button class="btn btn-primary pull-right" id="send_contact_form" type="submit">Send</button>
+                </form>
+            </div>
+            <div id="feedback-tab">Feedback</div>
+        </div>
+
+        <nav class="navbar navbar-inverse navbar-fixed-top" id="top_navbar">
+            <div class="container">
+                <div class="navbar-inner">
+                    <ul class="nav navbar-nav">
+                        <li id="top_navbar_home"><a href="/"><span class="glyphicon glyphicon-home" aria-hidden="true"></span></a></li>
+                        <li><a 
+                            
+                            href="/daily_arXiv" style="padding-right:10px">Papers</a></li>
+                        <li><a href="/manage_jc" style="padding-right:10px">Journal Club</a></li>
+                        <li><a href="/benty-search" style="padding-right:10px">Benty-search</a></li>
+                        
+                            <li><a href="/job_market" style="padding-right:10px">Jobs</a></li>
+                        
+                        <li><a href="/seminars" style="padding-right:10px">Seminars</a></li>
+                        <!--<li><a id="blinker" href="/support">Support</a></li>-->
+                        <li><a id="blinker" href="/support" style="font-weight:bolder;color:#ff4d94;">Support!</a></li>
+                    </ul>
+                    <ul class="nav navbar-nav pull-right" id="top_right_navbar">
+                        
+                            <li>                                
+                                <a href="/user_profile/30422">
+                                    
+                                        <img id="navbar_profile_picture" src="/static/pdfs/30422_Professional_Headshot_low_res.png" style="text-align: center;
+                                                        font-style: italic;
+                                                        background-color: #FFFFFF;
+                                                        font-size: 80%;
+                                                        width: 15px;
+                                                        max-height: 20px;
+                                                        border: 1px solid #000000;
+                                                        padding: 1;"/>  
+                                    
+                                    My Profile
+                                </a>
+                            </li>  
+                            <li class="dropdown" id="dropdown_main">
+                                <a href="#" data-toggle="dropdown" id="dropdown_symbol"><span class="glyphicon glyphicon-cog"></span></a>
+                                <ul class="dropdown-menu dropdown-toggle" id="dropdown_right">
+                                    <li><a href="/account_settings">Account Settings </a></li>
+                                    <li><a href="/help">Help</a></li> 
+                                    <li><a href="/about">About</a></li>
+                                    <li><a href="/projects">Projects</a></li>
+                                    <!--<li><a href="/trending">Trending</a></li>-->
+                                    <li class="divider"></li>
+                                    <li><a href="/logout">Logout <span class="glyphicon glyphicon-log-out pull-right"></span></a></li>
+                                </ul>
+                            </li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        
+
+    <div id="navbar_wrapper">
+        
+
+    <nav class="navmenu-inverse" id="mobile_navbar">
+        <a class="navmenu-brand" href="/">Benty-fields</a>
+        <ul class="nav navmenu-nav">
+            <li><a href="/daily_arXiv">Papers</a></li>
+            <li><a href="/manage_jc">Journal Club</a></li>
+            <li><a href="/benty-search">Benty-search</a></li>
+            <li><a href="/job_market">Jobs</a></li>
+            <li><a href="/seminars">Seminars</a></li>
+            <li><a href="/support">Support</a></li>
+            
+                <li class="nav-divider"></li>
+                <li  class="active" ><a href="/daily_arXiv">Daily Papers</a></li>
+                <li ><a href="/most_popular">Most Popular</a></li>
+                <li ><a href="/discussion">Active Discussions</a></li>
+                <li ><a href="/library">My Library</a></li>
+                <li class="nav-divider"></li>
+                <li ><a href="/training_data">My training data</a></li>
+                <li class="nav-divider"></li>
+            
+            
+                <li>                                
+                    <a href="/user_profile/30422">
+                        My Profile
+                    </a>
+                </li>   
+                <li >
+                    <a href="/account_settings">Account Settings </a>
+                </li>
+                <li >
+                    <a href="/help">Help</a>
+                </li>
+                <li >
+                    <a href="/about">About</a>
+                </li>
+                <li>
+                    <a href="/logout">Logout</a>
+                </li>
+            
+        </ul>
+    </nav>
+
+
+        
+
+    <nav class="navbar navbar-default navbar-fixed-top" id="mobile_hamburger">
+        <button type="button" id="hamburger_button" class="navbar-btn">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </nav>
+
+
+        <div id="site_content">
+            <div class="container">
+                
+
+    <div class="col-sm-3 col-md-2 col-lg-2 nav_container" id="left_sidebar" role="navigation" style="padding:0px">
+        <ul class="nav nav-sidebar">
+            <li  class="active" ><a href="/daily_arXiv">Daily Papers</a></li>
+            <li ><a href="/most_popular">Most Popular</a></li>
+            <li ><a href="/discussion">Active Discussions</a></li>
+            <li ><a href="/library">My Library</a></li>
+            <li ><a href="/training_data">My training data</a></li>
+        </ul>
+    </div><!--/.sidebar-offcanvas-->
+
+
+                <div class="col-xs-12 col-sm-9 col-md-10 col-lg-10 main_container">
+                    <h1 class="page_heading"> Papers </h1>
+                    <br>
+                    
+
+                    
+                        
+    <div class="pull-right">
+        <a href="#" onclick="open_query_settings()" style="text-decoration:none; display:inline" data-id="1" id="open_selection_field">
+            Open settings
+        </a> 
+    </div>
+    <div id="current_selection" style="font-size:12pt;">
+        <p>
+            <b>Current selection:</b>
+            <br>
+            
+                
+                    <input type="checkbox" class="checkbox_selected" checked disabled> 
+                        High Energy Astrophysical Phenomena 
+                    </input><br>
+                
+            
+                
+                    <input type="checkbox" class="checkbox_selected" checked disabled> 
+                        Cosmology and Nongalactic Astrophysics 
+                    </input><br>
+                
+            
+                
+            
+                
+            
+                
+            
+                
+            
+            
+                ...<br>
+            
+        </p>
+    </div>
+
+<div id="display_query_settings"  style="display:none" >
+    <form action="/daily_arXiv" method=POST>
+        <!-- 
+    <div id="query_setting_current_selection" style="font-size:12pt;">
+        <p>
+            <b>Current selection:</b>
+            <br>
+            
+                
+                    <input type="checkbox" class="checkbox_selected" id="_selected" checked> High Energy Astrophysical Phenomena </input><br>
+                
+            
+                
+                    <input type="checkbox" class="checkbox_selected" id="_selected" checked> Cosmology and Nongalactic Astrophysics </input><br>
+                
+            
+                
+                    <input type="checkbox" class="checkbox_selected" id="_selected" checked> Astrophysics of Galaxies </input><br>
+                
+            
+                
+                    <input type="checkbox" class="checkbox_selected" id="_selected" checked> Computational Physics </input><br>
+                
+            
+                
+                    <input type="checkbox" class="checkbox_selected" id="_selected" checked> Popular Physics </input><br>
+                
+            
+                
+                    <input type="checkbox" class="checkbox_selected" id="_selected" checked> Data Analysis, Statistics and Probability </input><br>
+                
+            
+        </p>
+    </div>
+ -->
+
+<p>
+<!--
+    
+        <input type="checkbox" name="email_notification" id="email_notification" value="True" unchecked> Email notify when new papers are available</input><br>
+     -->
+
+    
+        
+            <span data-toggle="tooltip" data-placement="bottom" title="Only for full members.">
+                <input type="checkbox" name="email_notification" id="email_notification" value="True" unchecked disabled> 
+            </span>
+            Email notify when new papers are available</input><br>
+        
+    
+
+    
+        <input type="checkbox" name="cross_listings" id="cross_listings" value="True" checked> Show cross-listings</input><br>
+    
+
+    
+        <input type="checkbox" name="updates" id="updates" value="True" unchecked> Show updates</input><br>
+    
+</p>  
+
+<br>     
+
+<div class="col-md-10">
+    <button type=submit name="submit_query" class="btn btn-primary submit_query" value="submit_query">Save</button>
+    
+        <a type=submit class="btn btn-default" href="#" onclick="open_query_settings();"> Dismiss</a>
+    
+
+    <br><br>
+
+    <div id="arxiv_category_selection_field">
+        <!-- The category selection is added dynamically when the user clicks on open settings. We 
+        do this to minimize the loading time. Only if the user has no query selection do we load it-->
+        
+    </div>
+</div>
+    </form>
+</div>
+
+
+    <div id="show_daily_papers">
+        <br>
+        
+            <form class="form-horizontal" action="/daily_arXiv_results" method='POST'>
+                <div class="well well-sm" style="max-width:270px">
+                    <div style="display:inline;padding:0px">
+                        <div style="display:inline;">
+                            View the last
+                            <select class="form-control selectpicker" data-width="50px" id="number_of_days" name="number_of_days" style="display:inline;"><option selected value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select>
+                            day(s)&nbsp;&nbsp;&nbsp;&nbsp;
+                        </div>
+                    </div>
+                    <div class="render" style="display:inline;text-decoration:none">
+                        <button name="show_paper_days" class="btn btn-primary" type="submit" value="show_paper_days"> Go</button>
+                    </div>
+                </div>
+            </form>
+        
+        <div class="list-group" style="margin:0px;padding:0px">
+            
+                <a href="/daily_arXiv_results?date=2026-06-12"  class="list-group-item render" >
+                    Friday, June 12, 2026<br>
+                    main submissions: 54 
+                     
+                        | cross-listings: 18 
+                    
+                    
+                </a>
+            
+                <a href="/daily_arXiv_results?date=2026-06-11"  class="list-group-item list-group-item-info render" >
+                    Thursday, June 11, 2026<br>
+                    main submissions: 59 
+                     
+                        | cross-listings: 28 
+                    
+                    
+                </a>
+            
+                <a href="/daily_arXiv_results?date=2026-06-10"  class="list-group-item list-group-item-info render" >
+                    Wednesday, June 10, 2026<br>
+                    main submissions: 71 
+                     
+                        | cross-listings: 30 
+                    
+                    
+                </a>
+            
+                <a href="/daily_arXiv_results?date=2026-06-09"  class="list-group-item list-group-item-info render" >
+                    Tuesday, June 09, 2026<br>
+                    main submissions: 62 
+                     
+                        | cross-listings: 44 
+                    
+                    
+                </a>
+            
+                <a href="/daily_arXiv_results?date=2026-06-08"  class="list-group-item list-group-item-info render" >
+                    Monday, June 08, 2026<br>
+                    main submissions: 35 
+                     
+                        | cross-listings: 17 
+                    
+                    
+                </a>
+            
+                <a href="/daily_arXiv_results?date=2026-06-05"  class="list-group-item list-group-item-info render" >
+                    Friday, June 05, 2026<br>
+                    main submissions: 54 
+                     
+                        | cross-listings: 24 
+                    
+                    
+                </a>
+            
+                <a href="/daily_arXiv_results?date=2026-06-04"  class="list-group-item list-group-item-info render" >
+                    Thursday, June 04, 2026<br>
+                    main submissions: 56 
+                     
+                        | cross-listings: 25 
+                    
+                    
+                </a>
+            
+        </div>
+        <nav align=center style="padding-top:-20px; margin-top:-20px">
+            <ul class="pagination">
+                
+                    <li class="disabled"><a href="#" aria-label="Previous"><span aria-hidden="true">Newer</span></a></li>
+                
+                
+                    
+                        
+                            <li class="active"><a href="#">1 <span class="sr-only">(current)</span></a></li>
+                        
+                    
+                
+                    
+                        
+                            <li><a href="/daily_arXiv/2">2</a></li>
+                        
+                    
+                
+                    
+                        
+                            <li><a href="/daily_arXiv/3">3</a></li>
+                        
+                    
+                
+                    
+                        
+                            <li><a href="/daily_arXiv/4">4</a></li>
+                        
+                    
+                
+                    
+                        
+                            <li><a href="/daily_arXiv/5">5</a></li>
+                        
+                    
+                
+                    
+                        <li class="disabled"><span class=ellipsis>…</span></li>
+                    
+                
+                    
+                        
+                            <li><a href="/daily_arXiv/378">378</a></li>
+                        
+                    
+                
+                    
+                        
+                            <li><a href="/daily_arXiv/379">379</a></li>
+                        
+                    
+                
+                
+                    <li><a href="/daily_arXiv/2" aria-label="Next"><span aria-hidden="true">Older</span></a></li>
+                
+            </ul>
+        </nav>
+    </div>
+
+                    
+                </div> 
+            </div>     
+        </div>
+    </div>
+
+    
+
+
+
+        <!-- defer -> A script that will not run until after the page has loaded 
+        async -> is downloaded inparallel to html parsing and executed after download 
+        http://www.growingwiththeweb.com/2014/02/async-vs-defer-attributes.html -->
+
+        <script type="text/javascript" src="/static/include/jquery-2.1.1.min.js?1522"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.13.0/moment.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.37/js/bootstrap-datetimepicker.min.js"></script>
+
+        <script type="text/javascript" src="/static/include/js/jquery.timepicker.min.js?1526"></script>
+        <script type="text/javascript" src="/static/include/main_combined.min.js?1542"></script>
+        <link rel="stylesheet" href="/static/include/font-awesome/css/font-awesome.min.css?1516">
+        <link rel="stylesheet" href="/static/include/behind_fold_main_combined.min.css?1515">
+        
+        
+        <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment-with-locales.min.js" integrity="sha256-AdQN98MVZs44Eq2yTwtoKufhnU+uZ7v2kXnD5vqzZVo=" crossorigin="anonymous"></script>
+<script>
+moment.locale("en");
+function flask_moment_render(elem) {
+    $(elem).text(eval('moment("' + $(elem).data('timestamp') + '").' + $(elem).data('format') + ';'));
+    $(elem).removeClass('flask-moment').show();
+}
+function flask_moment_render_all() {
+    $('.flask-moment').each(function() {
+        flask_moment_render(this);
+        if ($(this).data('refresh')) {
+            (function(elem, interval) { setInterval(function() { flask_moment_render(elem) }, interval); })(this, $(this).data('refresh'));
+        }
+    })
+}
+$(document).ready(function() {
+    flask_moment_render_all();
+});
+</script>
+        
+
+        <div class="modal fade" id="wait_msg" style="z-index:100000" role="dialog">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="form-horizontal">
+                        <div class="modal-body">
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                            <div id="user_msg"></div>
+                        </div>
+                    </div>                                  
+                </div>
+            </div>
+        </div>
+
+<!--         <script type="text/javascript">
+            window.addEventListener("load", function() {
+                var f = document.getElementById('blinker');
+                setInterval(function() {
+                    f.style.color = (f.style.color == 'red' ? '#A9A9A9' : 'red');
+                }, 1000);
+            }, false);
+        </script> -->
+
+        
+    </body>
+</html>

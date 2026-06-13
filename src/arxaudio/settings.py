@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 _DEFAULTS: dict[str, object] = {
     "CATEGORIES": ["astro-ph.CO", "astro-ph.GA"],
+    "PAPER_SOURCE": "arxiv",
+    "BENTY_BASE_URL": "https://www.benty-fields.com",
     "LLM_BACKEND": "ollama",
     "OLLAMA_MODEL": "qwen2.5:0.5b",
     "TTS_BACKEND": "edge",
@@ -44,6 +46,9 @@ _DEFAULTS: dict[str, object] = {
 @dataclass
 class Settings:
     """Fully-resolved, validated configuration for one pipeline run."""
+
+    # Paper source — "arxiv" (RSS) or "benty" (benty-fields ML ranking)
+    paper_source: str = "arxiv"
 
     # arXiv
     categories: list[str] = field(default_factory=lambda: ["astro-ph.CO", "astro-ph.GA"])
@@ -64,6 +69,11 @@ class Settings:
     # Email
     email_subject_prefix: str = "ArXaudio Digest"
 
+    # benty-fields (populated from env vars — never stored in config.py)
+    benty_base_url: str = "https://www.benty-fields.com"
+    benty_email: str = ""
+    benty_password: str = ""
+
     # SMTP (populated from env vars — never stored in config.py)
     smtp_host: str = ""
     smtp_port: int = 587
@@ -75,6 +85,11 @@ class Settings:
     # -----------------------------------------------------------------------
     # Derived helpers
     # -----------------------------------------------------------------------
+
+    @property
+    def benty_configured(self) -> bool:
+        """Return True if benty-fields credentials are present."""
+        return bool(self.benty_email and self.benty_password)
 
     @property
     def smtp_configured(self) -> bool:
@@ -141,6 +156,21 @@ def _get(mod: ModuleType, name: str, default: object) -> object:
 
 def _validate(settings: Settings, config_path: Path) -> None:
     """Raise ValueError with a helpful message if configuration is invalid."""
+    if settings.paper_source not in {"arxiv", "benty"}:
+        raise ValueError(
+            f"PAPER_SOURCE must be one of 'arxiv' or 'benty' "
+            f"(got {settings.paper_source!r}).  "
+            "Set PAPER_SOURCE = 'arxiv' to use the default arXiv RSS path, "
+            "or PAPER_SOURCE = 'benty' to use benty-fields ML ranking."
+        )
+    if settings.paper_source == "benty" and not settings.benty_configured:
+        raise ValueError(
+            "PAPER_SOURCE is set to 'benty' but the required credentials are "
+            "missing.  Set the BENTY_EMAIL and BENTY_PASSWORD environment "
+            "variables (your benty-fields.com login — use a unique password not "
+            "reused elsewhere).  In GitHub Actions, add them as repository "
+            "Secrets.  Do NOT put credentials in config.py."
+        )
     if not settings.categories:
         raise ValueError(
             f"CATEGORIES in {config_path} must be a non-empty list, "
@@ -203,6 +233,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
 
     # Build the settings object from config values + defaults
     settings = Settings(
+        paper_source=str(get("PAPER_SOURCE")).strip().lower(),
         categories=list(get("CATEGORIES")),           # type: ignore[arg-type]
         llm_backend=str(get("LLM_BACKEND")),
         ollama_model=str(get("OLLAMA_MODEL")),
@@ -212,6 +243,10 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         pause_seconds=float(get("PAUSE_SECONDS")),     # type: ignore[arg-type]
         max_papers=int(get("MAX_PAPERS")),             # type: ignore[arg-type]
         email_subject_prefix=str(get("EMAIL_SUBJECT_PREFIX")),
+        # benty-fields credentials come from env vars, never from config.py
+        benty_base_url=str(get("BENTY_BASE_URL")).rstrip("/"),
+        benty_email=os.environ.get("BENTY_EMAIL", ""),
+        benty_password=os.environ.get("BENTY_PASSWORD", ""),
         # SMTP credentials come from env vars, never from config.py
         smtp_host=os.environ.get("SMTP_HOST", ""),
         smtp_port=int(os.environ.get("SMTP_PORT", "587")),
@@ -236,6 +271,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
             settings.smtp_user,
         )
 
+    logger.info("Paper source: %s", settings.paper_source)
     logger.info(
         "Settings loaded: %d categories, model=%s, voice=%s",
         len(settings.categories),

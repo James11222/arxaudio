@@ -1,0 +1,236 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="author" content="">
+
+        <title>benty-fields - Login</title>
+        
+<meta name="description" content="Provide your login credentials.">
+
+
+        <link rel="shortcut icon" href="/static/favicon/favicon.ico" type="image/x-icon">
+        <link rel="apple-touch-icon" href="/static/favicon/apple-icon-152x152.png" type="image/png">
+        <link href="/static/include/main_combined.min.css" rel="stylesheet">
+
+        <!-- This is needed for the Patreon symbol in the benty-footer -->
+        <script src='https://kit.fontawesome.com/a076d05399.js'></script>
+        <!-- Adding Stripe.js automatically includes advanced fraud detection whenever your customers uses Checkout -->
+        <script src="https://js.stripe.com/v3/"></script>
+
+        <script type="text/javascript">
+            var $SCRIPT_ROOT = "";
+        </script>
+
+
+    </head>
+
+    <body>
+        <div id="feedback" style="z-index:10000000000000000000">
+            <div id="feedback-form" style='display:none;' class="col-xs-4 col-md-4 panel panel-default">
+                <form method="POST" action="/feedback" class="form panel-body">
+                    <div class="form-group">
+                        <input class="form-control" id="feedback-email" name="email"  required placeholder="Your e-mail"  type="text">
+                    </div>
+                    <div class="form-group">
+                        <textarea class="form-control" id="feedback-message" name="message" required placeholder="Please write your feedback here..." rows="5"></textarea>
+                    </div>
+                    <button class="btn btn-primary pull-right" id="send_contact_form" type="submit">Send</button>
+                </form>
+            </div>
+            <div id="feedback-tab">Feedback</div>
+        </div>
+
+        <nav class="navbar navbar-inverse navbar-fixed-top" id="top_navbar">
+            <div class="container">
+                <div class="navbar-inner">
+                    <ul class="nav navbar-nav">
+                        <li id="top_navbar_home"><a href="/"><span class="glyphicon glyphicon-home" aria-hidden="true"></span></a></li>
+                        <li><a 
+                            
+                            href="/daily_arXiv" style="padding-right:10px">Papers</a></li>
+                        <li><a href="/manage_jc" style="padding-right:10px">Journal Club</a></li>
+                        <li><a href="/benty-search" style="padding-right:10px">Benty-search</a></li>
+                        
+                            <li><a href="/job_market" style="padding-right:10px">Jobs</a></li>
+                        
+                        <li><a href="/seminars" style="padding-right:10px">Seminars</a></li>
+                        <!--<li><a id="blinker" href="/support">Support</a></li>-->
+                        <li><a id="blinker" href="/support" style="font-weight:bolder;color:#ff4d94;">Support!</a></li>
+                    </ul>
+                    <ul class="nav navbar-nav pull-right" id="top_right_navbar">
+                        
+                            <li><a href="/login">Login</a></li>
+                            <li><a href="/register">Register</a></li>
+                        
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        
+
+    <div id="navbar_wrapper">
+
+        
+
+    <nav class="navmenu-inverse" id="mobile_navbar">
+        <a class="navmenu-brand" href="/">Benty-fields</a>
+        <ul class="nav navmenu-nav">
+            <li><a href="/daily_arXiv">Papers</a></li>
+            <li><a href="/manage_jc">Journal Club</a></li>
+            <li><a href="/benty-search">Benty-search</a></li>
+            <li><a href="/job_market">Jobs</a></li>
+            <li><a href="/seminars">Seminars</a></li>
+            <li><a href="/support">Support</a></li>
+            
+            
+                <li ><a href="/login">Login</a></li>
+                <li ><a href="/register">Register</a></li>
+            
+        </ul>
+    </nav>
+
+
+        
+
+    <nav class="navbar navbar-default navbar-fixed-top" id="mobile_hamburger">
+        <button type="button" id="hamburger_button" class="navbar-btn">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </nav>
+
+
+
+        <div id="site_content">
+            <div class="container">
+                <div class="modal-dialog" style="padding-top:50px">
+                    <div class="modal-content">
+                        <form class="form-horizontal" method="post" action="/login" role="form">
+                            <fieldset>
+                                <div class="modal-header">
+                                    <h2>Login</h2>
+                                </div>
+                                <div class="modal-body">
+
+                                    
+
+                                    
+
+                                    
+
+                                    <input id="csrf_token" name="csrf_token" type="hidden" value="IjBhMjRhOTRkODgzMjViMGI1ODllZDUxMDZiZGNkNTY1OWExYmMwYWEi.aizh6g.e_XWWhKxTsWvb2w7diXkfOuRpgM">
+                                    
+
+    <div class="form-group" style="padding:0px;">    
+        <div class="col-xs-4 col-md-3">
+            <label class="control-label pull-right" for="email">Email:</label>
+        </div>
+        <div class="col-xs-8 col-md-9">
+            <input class="form-control" id="email" maxlength="10000" name="email" required type="email" value="">
+        </div>
+    </div>
+
+
+                                    
+
+    <div class="form-group" style="padding:0px;">    
+        <div class="col-xs-4 col-md-3">
+            <label class="control-label pull-right" for="password">Password:</label>
+        </div>
+        <div class="col-xs-8 col-md-9">
+            <input class="form-control" id="password" maxlength="10000" name="password" required type="password" value="">
+        </div>
+    </div>
+
+
+
+                                    <div class="my_right_aligned">
+                                        <a href='/reset-password'>  Forgot your password?</a>
+                                    </div>
+                                   
+                                </div>
+                                <div class="modal-footer"> 
+                                    <p>
+                                        Don't have an account? <a href='/register'>Sign up</a> <br>
+                                    </p>
+                                    <button type="submit" class="btn btn-primary btn-lg">Login</button>
+                                    <a class="btn btn-default btn-lg" href="/index" data-dismiss="modal">Cancel</a>
+                                    <input type=hidden value="" name=next>
+                                </div>
+                            </fieldset>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+        <!-- defer -> A script that will not run until after the page has loaded 
+        async -> is downloaded inparallel to html parsing and executed after download 
+        http://www.growingwiththeweb.com/2014/02/async-vs-defer-attributes.html -->
+
+        <script type="text/javascript" src="/static/include/jquery-2.1.1.min.js?1522"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.13.0/moment.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.37/js/bootstrap-datetimepicker.min.js"></script>
+
+        <script type="text/javascript" src="/static/include/js/jquery.timepicker.min.js?1526"></script>
+        <script type="text/javascript" src="/static/include/main_combined.min.js?1542"></script>
+        <link rel="stylesheet" href="/static/include/font-awesome/css/font-awesome.min.css?1516">
+        <link rel="stylesheet" href="/static/include/behind_fold_main_combined.min.css?1515">
+        
+        
+        <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment-with-locales.min.js" integrity="sha256-AdQN98MVZs44Eq2yTwtoKufhnU+uZ7v2kXnD5vqzZVo=" crossorigin="anonymous"></script>
+<script>
+moment.locale("en");
+function flask_moment_render(elem) {
+    $(elem).text(eval('moment("' + $(elem).data('timestamp') + '").' + $(elem).data('format') + ';'));
+    $(elem).removeClass('flask-moment').show();
+}
+function flask_moment_render_all() {
+    $('.flask-moment').each(function() {
+        flask_moment_render(this);
+        if ($(this).data('refresh')) {
+            (function(elem, interval) { setInterval(function() { flask_moment_render(elem) }, interval); })(this, $(this).data('refresh'));
+        }
+    })
+}
+$(document).ready(function() {
+    flask_moment_render_all();
+});
+</script>
+        
+
+        <div class="modal fade" id="wait_msg" style="z-index:100000" role="dialog">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="form-horizontal">
+                        <div class="modal-body">
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                            <div id="user_msg"></div>
+                        </div>
+                    </div>                                  
+                </div>
+            </div>
+        </div>
+
+<!--         <script type="text/javascript">
+            window.addEventListener("load", function() {
+                var f = document.getElementById('blinker');
+                setInterval(function() {
+                    f.style.color = (f.style.color == 'red' ? '#A9A9A9' : 'red');
+                }, 1000);
+            }, false);
+        </script> -->
+
+        
+    </body>
+</html>

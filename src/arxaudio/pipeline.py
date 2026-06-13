@@ -13,6 +13,10 @@ Flow (see idea.md / PLAN.md):
     LLM-clean math + TTS into one MP3, the next N are listed email-only →
     email it.
 
+    When PAPER_SOURCE == "benty", benty-fields replaces BOTH the arXiv fetch
+    and the LLM rank stage: it returns the day's papers already in benty's
+    ML-ranked order (best first), so everything downstream is unchanged.
+
 Error policy (idea.md):
     * Systemic failures exit nonzero so GitHub Actions surfaces a real problem:
       arXiv unreachable, ollama server/model missing, SMTP auth failure when the
@@ -271,11 +275,28 @@ def run(args: argparse.Namespace) -> int:
 
     output_path = Path(args.output) if args.output else _default_output()
 
-    needs_llm = not (args.no_rank and args.no_llm_clean)
+    benty_mode = settings.paper_source == "benty"
+
+    # In benty mode the ranking comes pre-computed by benty's ML model and never
+    # touches the LLM, so the only LLM use is the process/clean step. A benty +
+    # --no-llm-clean run therefore needs no ollama at all (health check skipped).
+    if benty_mode:
+        needs_llm = not args.no_llm_clean
+    else:
+        needs_llm = not (args.no_rank and args.no_llm_clean)
 
     # --- Fetch ----------------------------------------------------------
-    # A RuntimeError here (arXiv unreachable) is systemic; let it propagate.
-    papers = fetch.fetch_announced_papers(settings.categories)
+    # A RuntimeError here (arXiv unreachable, or benty login/network) is
+    # systemic; let it propagate.
+    if benty_mode:
+        import arxaudio.benty as benty
+
+        logger.info(
+            "Source: benty-fields (papers come pre-ranked by your account's ML model)."
+        )
+        papers = benty.fetch_benty_papers(settings)
+    else:
+        papers = fetch.fetch_announced_papers(settings.categories)
     if not papers:
         logger.info("nothing new today — no papers in today's mailing. Exiting.")
         return 0
@@ -303,14 +324,21 @@ def run(args: argparse.Namespace) -> int:
     # When MAX_PAPERS == 0 (unlimited) we still rank, so audio order reflects
     # relevance, unless --no-rank says otherwise.
     n = settings.max_papers
-    skip_rank = args.no_rank or (n and len(papers) <= n)
-    if skip_rank:
+    if benty_mode:
+        # benty already returned papers in its ML-ranked order; that order IS
+        # the ranking, so the LLM rank step is skipped entirely (--no-rank is
+        # irrelevant here).
         ranked = list(papers)
-        reason = "--no-rank" if args.no_rank else f"fetched <= MAX_PAPERS={n}"
-        logger.info("Ranking skipped (%s): using arrival order.", reason)
+        logger.info("Using benty-fields ranking (LLM ranking step skipped).")
     else:
-        assert llm is not None
-        ranked = rank_stage.rank_papers(papers, llm, preferences)
+        skip_rank = args.no_rank or (n and len(papers) <= n)
+        if skip_rank:
+            ranked = list(papers)
+            reason = "--no-rank" if args.no_rank else f"fetched <= MAX_PAPERS={n}"
+            logger.info("Ranking skipped (%s): using arrival order.", reason)
+        else:
+            assert llm is not None
+            ranked = rank_stage.rank_papers(papers, llm, preferences)
 
     # --- Split into audio papers + email-only extras --------------------
     kept, extras = _split_ranked(ranked, n)

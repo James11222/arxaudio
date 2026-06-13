@@ -127,6 +127,9 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          # Benty scraper credentials — only needed when PAPER_SOURCE="benty" in config.py
+          BENTY_EMAIL: ${{ secrets.BENTY_EMAIL }}
+          BENTY_PASSWORD: ${{ secrets.BENTY_PASSWORD }}
         run: |
           ARGS=()
           # workflow_dispatch optional inputs → CLI flags.
