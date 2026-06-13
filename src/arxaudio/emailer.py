@@ -23,6 +23,7 @@ Usage::
 
 from __future__ import annotations
 
+import html
 import logging
 import mimetypes
 import smtplib
@@ -97,8 +98,9 @@ def send_digest(
 
     n_audio = len(audio_papers)
     subject = _build_subject(settings.email_subject_prefix, n_audio)
-    body = _build_body(audio_papers, extra_papers)
-    msg = _build_message(sender, recipient, subject, body, mp3_path)
+    text_body = _build_body(audio_papers, extra_papers, settings.repo_url)
+    html_body = _build_html_body(audio_papers, extra_papers, settings.repo_url)
+    msg = _build_message(sender, recipient, subject, text_body, html_body, mp3_path)
 
     _send(settings, msg, sender, recipient)
     logger.info(
@@ -122,16 +124,20 @@ def _build_subject(prefix: str, n_papers: int) -> str:
     return f"{prefix} — {today} ({n_papers} {plural})"
 
 
-def _paper_byline(paper: Paper) -> str:
-    """Return 'First Author et al. — <url>' or 'First Author — <url>'."""
+def _author_line(paper: Paper) -> str:
+    """Return 'First Author et al.' or 'First Author' for display."""
     author = paper.first_author
     if len(paper.authors) > 1:
         author += " et al."
-    return f"  {author} — {paper.url}"
+    return author
 
 
-def _build_body(audio_papers: list[Paper], extra_papers: list[Paper]) -> str:
-    """Return the plain-text email body."""
+def _build_body(
+    audio_papers: list[Paper],
+    extra_papers: list[Paper],
+    repo_url: str,
+) -> str:
+    """Return the plain-text email body (fallback for non-HTML clients)."""
     today = date.today().strftime("%A, %B %-d %Y")
     n_audio = len(audio_papers)
     lines: list[str] = [
@@ -139,49 +145,152 @@ def _build_body(audio_papers: list[Paper], extra_papers: list[Paper]) -> str:
         f"{n_audio} paper{'s' if n_audio != 1 else ''} included in today's audio.",
         "",
         "In today's audio:",
-        "------------------",
+        "==================",
+        "",
     ]
     for i, paper in enumerate(audio_papers, start=1):
-        lines.append(f"  {i:2d}. {paper.title}")
-        lines.append(_paper_byline(paper))
+        lines += [
+            f"{i:2d}. {paper.title}",
+            f"    {_author_line(paper)}",
+            f"    {paper.url}",
+            "",
+        ]
 
     if extra_papers:
         lines += [
             "",
-            "---------------------------------------------",
             "More new papers (not in the audio):",
-            "---------------------------------------------",
+            "===================================",
+            "",
         ]
         for i, paper in enumerate(extra_papers, start=n_audio + 1):
-            lines.append(f"  {i:2d}. {paper.title}")
-            lines.append(_paper_byline(paper))
+            lines += [
+                f"{i:2d}. {paper.title}",
+                f"    {_author_line(paper)}",
+                f"    {paper.url}",
+                "",
+            ]
 
     lines += [
         "",
         "The MP3 file is attached.  Happy* listening!",
         "",
         "--",
-        "Sent by arxaudio  <https://github.com/jsunseri/arxaudio>",
-        "*: Not happy listening? Open an issue on Github!",
+        f"Sent by arxaudio  <{repo_url}>",
+        "*: Not happy listening? Open an issue on GitHub!",
     ]
     return "\n".join(lines)
+
+
+def _html_paper_item(index: int, paper: Paper) -> str:
+    """Return one styled HTML list entry for a paper."""
+    title = html.escape(paper.title)
+    author = html.escape(_author_line(paper))
+    url = html.escape(paper.url, quote=True)
+    return (
+        '<tr><td style="padding:0 0 22px 0;">'
+        f'<div style="font-size:12px;color:#9aa0a6;font-weight:600;'
+        f'letter-spacing:.04em;">{index}</div>'
+        f'<a href="{url}" style="font-size:16px;line-height:1.4;'
+        f'font-weight:600;color:#1a73e8;text-decoration:none;">{title}</a>'
+        f'<div style="font-size:13px;color:#5f6368;margin-top:4px;">{author}</div>'
+        f'<a href="{url}" style="font-size:12px;color:#9aa0a6;'
+        f'text-decoration:none;">{url}</a>'
+        "</td></tr>"
+    )
+
+
+def _build_html_body(
+    audio_papers: list[Paper],
+    extra_papers: list[Paper],
+    repo_url: str,
+) -> str:
+    """Return the HTML email body."""
+    today = date.today().strftime("%A, %B %-d, %Y")
+    n_audio = len(audio_papers)
+    repo = html.escape(repo_url, quote=True)
+
+    def section(heading: str, papers: list[Paper], start: int) -> str:
+        rows = "".join(
+            _html_paper_item(i, p) for i, p in enumerate(papers, start=start)
+        )
+        return (
+            f'<h2 style="font-size:13px;text-transform:uppercase;'
+            f'letter-spacing:.08em;color:#5f6368;font-weight:700;'
+            f'margin:32px 0 18px 0;padding-bottom:8px;'
+            f'border-bottom:1px solid #ececec;">{html.escape(heading)}</h2>'
+            f'<table role="presentation" cellpadding="0" cellspacing="0" '
+            f'width="100%" style="border-collapse:collapse;">{rows}</table>'
+        )
+
+    body_sections = section("In today's audio", audio_papers, 1)
+    if extra_papers:
+        body_sections += section(
+            "More new papers (not in the audio)", extra_papers, n_audio + 1
+        )
+
+    plural = "paper" if n_audio == 1 else "papers"
+    return f"""\
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#f4f5f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+         style="background:#f4f5f7;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+             style="max-width:600px;width:100%;background:#ffffff;
+                    border-radius:12px;overflow:hidden;
+                    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',
+                    Roboto,Helvetica,Arial,sans-serif;
+                    box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+        <tr><td style="background:#1a1a2e;padding:28px 32px;">
+          <div style="font-size:22px;font-weight:700;color:#ffffff;">
+            🎧 ArXaudio Digest</div>
+          <div style="font-size:14px;color:#b8b8d0;margin-top:6px;">{today}</div>
+        </td></tr>
+        <tr><td style="padding:24px 32px 8px 32px;">
+          <p style="font-size:15px;color:#3c4043;margin:0;">
+            <strong>{n_audio}</strong> {plural} included in today's audio.
+            The MP3 is attached — happy listening!
+          </p>
+          {body_sections}
+        </td></tr>
+        <tr><td style="padding:20px 32px 28px 32px;border-top:1px solid #ececec;">
+          <p style="font-size:12px;color:#9aa0a6;margin:0;line-height:1.6;">
+            Sent by <a href="{repo}" style="color:#1a73e8;
+            text-decoration:none;">arxaudio</a>.<br>
+            Not happy listening?
+            <a href="{repo}/issues" style="color:#1a73e8;
+            text-decoration:none;">Open an issue on GitHub</a>.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 
 def _build_message(
     sender: str,
     recipient: str,
     subject: str,
-    body: str,
+    text_body: str,
+    html_body: str,
     mp3_path: Path,
 ) -> MIMEMultipart:
-    """Assemble a MIME multipart message with a plain-text body and MP3 attachment."""
-    msg = MIMEMultipart()
+    """Assemble a MIME message: plain-text + HTML alternatives and an MP3 attachment."""
+    msg = MIMEMultipart("mixed")
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
 
-    # Plain-text body
-    msg.attach(MIMEText(body, "plain", "utf-8"))
+    # Body: plain-text fallback first, then HTML (clients pick the richest they
+    # can render). Wrapped in multipart/alternative alongside the attachment.
+    alternative = MIMEMultipart("alternative")
+    alternative.attach(MIMEText(text_body, "plain", "utf-8"))
+    alternative.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(alternative)
 
     # MP3 attachment
     mime_type, _ = mimetypes.guess_type(str(mp3_path))

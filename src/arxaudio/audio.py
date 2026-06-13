@@ -222,7 +222,7 @@ def build_daily_audio(
         for idx, paper in enumerate(kept):
             seg_path = tmp_dir / f"paper_{idx:03d}.mp3"
             try:
-                tts.synthesize(paper.spoken_text(), voice, seg_path)
+                tts.synthesize(paper.spoken_text(position=idx + 1), voice, seg_path)
                 segments.append(seg_path)
             except Exception as exc:  # noqa: BLE001 - skip-and-continue
                 logger.warning(

@@ -1,14 +1,125 @@
 # arxaudio
 
-Turn today's arXiv abstracts into a podcast-style MP3, delivered to your inbox every morning — no API keys, no paid services, no local GPU required. Fork the repo, drop in your interests, add five email secrets, and GitHub Actions handles everything else: fetching the papers arXiv announced that day, ranking them against your research preferences with a tiny local language model, cleaning up LaTeX notation for speech, synthesizing audio with a free neural TTS voice, and emailing you one MP3 a day.
+Turn today's arXiv abstracts into a podcast-style MP3, delivered to your inbox every morning — no API keys, no paid services, no local GPU required. Fork the repo, tell it what you're interested in, add a few email secrets, and GitHub Actions does the rest every weekday.
+
+**New here? Jump straight to the [Quick start](#quick-start-5-minutes).** Everything below that explains how it works and how to customize it — you don't need any of it to get a daily digest running.
+
+---
+
+## Quick start (5 minutes)
+
+You'll fork the repo, pick where your papers come from, add email secrets, and turn on the scheduled job. No code required.
+
+### 1. Fork this repository
+
+Click **Fork** on GitHub. Every step below happens on *your* fork.
+
+### 2. Choose your paper source
+
+arxaudio can get your daily papers in one of two ways. Pick **one** and edit `PAPER_SOURCE` in `config.py` accordingly.
+
+<table>
+<tr><th>Option A — arXiv (default)</th><th>Option B — benty-fields</th></tr>
+<tr><td valign="top">
+
+Pulls the day's new papers from arXiv's RSS feeds and ranks them with a tiny local AI model against interests you describe in plain English.
+
+**In `config.py`:**
+```python
+PAPER_SOURCE = "arxiv"
+```
+
+**Then edit two files:**
+
+- **`config.py` → `CATEGORIES`** — the arXiv categories to follow:
+  ```python
+  CATEGORIES = [
+      "astro-ph.CO",   # Cosmology
+      "cs.LG",         # Machine Learning
+  ]
+  ```
+  Full list: <https://arxiv.org/category_taxonomy>
+
+- **`preferences.md`** — describe, in plain English, the topics, methods, and surveys you care about (and a "Not interested in" section). This is fed to the ranking model.
+
+**No extra secrets needed.**
+
+</td><td valign="top">
+
+If you have a [benty-fields.com](https://www.benty-fields.com) account, let *its* machine-learning model — trained on your own reading and voting history — pick and rank the day's papers for you.
+
+**In `config.py`:**
+```python
+PAPER_SOURCE = "benty"
+```
+
+In this mode `CATEGORIES` and `preferences.md` are **ignored** — benty uses your account's settings — and the AI ranking step is skipped.
+
+**Add two more secrets** (alongside the email secrets in step 3):
+
+| Secret | Value |
+|--------|-------|
+| `BENTY_EMAIL` | Your benty-fields login email |
+| `BENTY_PASSWORD` | Your benty-fields password — **use a unique one**, since it's stored as a CI secret |
+
+More detail in the [benty-fields section](#paper-source-details-arxiv-vs-benty-fields).
+
+</td></tr>
+</table>
+
+### 3. Add email secrets
+
+On your fork: **Settings → Secrets and variables → Actions → New repository secret**. Add these five:
+
+| Secret name     | Description                                       |
+|-----------------|---------------------------------------------------|
+| `SMTP_HOST`     | Your SMTP server, e.g. `smtp.gmail.com`           |
+| `SMTP_PORT`     | `587` (STARTTLS) or `465` (SSL)                   |
+| `SMTP_USER`     | Your full email address                           |
+| `SMTP_PASSWORD` | Your SMTP password or app password                |
+| `EMAIL_TO`      | Recipient address (can be the same as `SMTP_USER`)|
+
+**Using Gmail?** You must create an *App Password*, not use your normal password:
+1. Google Account → Security → enable **2-Step Verification**.
+2. Search **App passwords** in your Google Account settings, create one (name it "arxaudio").
+3. Use `smtp.gmail.com` / `587` / your Gmail address / the generated 16-character password.
+
+**Other providers:** Outlook/Hotmail → `smtp.office365.com:587`; iCloud → `smtp.mail.me.com:587`. Make sure SMTP AUTH is enabled in your account. Port `465` switches to SSL automatically.
+
+### 4. (Optional) Point the email footer at your fork
+
+In `config.py`, set `REPO_URL` to your fork so the digest's "Sent by arxaudio" link is correct:
+
+```python
+REPO_URL = "https://github.com/your-username/arxaudio"
+```
+
+### 5. Enable Actions and run it
+
+1. Go to the **Actions** tab on your fork and click **"I understand my workflows, go ahead and enable them."**
+2. Select **"arxaudio daily digest"** → **Run workflow** to trigger the first run manually.
+
+The first run downloads the local AI model (~400 MB) and takes 10–15 minutes; later runs restore it from cache and are much faster. The finished MP3 is emailed to you *and* saved as a workflow artifact (under **Actions → your run → arxaudio-digest**, kept 14 days) so you can grab it even before email is working.
+
+That's it — by default it now runs automatically every weekday at 10:30 UTC.
+
+### 6. (Optional) Change the schedule
+
+Edit the cron line in `.github/workflows/daily.yml`:
+
+```yaml
+- cron: "30 10 * * 1-5"   # 10:30 UTC, Mon–Fri
+```
+
+arXiv announces new papers Mon–Fri around 00:00 UTC, so any morning-UTC run catches the fresh batch. Build your own time with [crontab.guru](https://crontab.guru/) (all GitHub Actions cron times are UTC).
 
 ---
 
 ## How it works
 
 ```
-arXiv API
-    │  feedparser (no key)
+arXiv RSS / benty-fields
+    │
     ▼
 ┌─────────┐   ┌──────────┐   ┌──────────────┐   ┌──────────┐   ┌────────────┐   ┌─────────┐
 │  Fetch  │──▶│   Rank   │──▶│  top-N only  │──▶│ Process  │──▶│    TTS     │──▶│  Email  │
@@ -24,9 +135,9 @@ arXiv API
 
 3. **Process** — `process.py` converts LaTeX and math notation into speakable English. A deterministic regex/literal pass driven by `math_replacements.md` runs first (fast, reliable), then one stateless LLM call per paper catches the long tail. The LLM output passes a length-drift and chatter check; if it fails, the regex-only version is used. The model is instructed to only replace notation — never paraphrase.
 
-4. **TTS + assembly** — `audio.py` and `tts/edge_backend.py` synthesize each paper as a separate MP3 using Microsoft's `edge-tts` (free, no key). Each paper is read as "title, by first author et al., abstract." Segments are joined with a configurable silence gap. If the result exceeds `MAX_MB` (default 20 MB), `audio.py` re-encodes progressively at lower bitrates (48k → 32k → 24k) until it fits.
+4. **TTS + assembly** — `audio.py` and `tts/edge_backend.py` synthesize each paper as a separate MP3 using Microsoft's `edge-tts` (free, no key). Each paper is announced with its position, title, and author ("Paper 1: <title>, written by <author> et al. The abstract reads: …") so you can follow along. Segments are joined with a configurable silence gap. If the result exceeds `MAX_MB` (default 20 MB), `audio.py` re-encodes progressively at lower bitrates (48k → 32k → 24k) until it fits.
 
-5. **Email** — `emailer.py` uses stdlib `smtplib` to attach the MP3 and send it. Credentials come entirely from environment variables (GitHub Secrets in CI). The email body lists all audio papers plus, below a divider, the email-only runner-up papers so you can skim before you listen.
+5. **Email** — `emailer.py` uses stdlib `smtplib` to attach the MP3 and send it as a formatted HTML email (with a plain-text fallback). Credentials come entirely from environment variables (GitHub Secrets in CI). The email lists all audio papers plus, in a second section, the email-only runner-up papers so you can skim before you listen.
 
 ### Pluggable backends
 
@@ -40,117 +151,33 @@ Then set `LLM_BACKEND = "mymodel"` in `config.py`. Nothing else in the pipeline 
 
 ---
 
-## Alternative paper source: benty-fields.com
+## Paper source details: arXiv vs benty-fields
 
-By default arxaudio fetches papers from arXiv's RSS feeds and ranks them with the local LLM. If you have an account on [benty-fields.com](https://www.benty-fields.com), you can instead let **benty-fields' own machine-learning model** — trained on your personal reading and voting history — pick and rank the day's papers for you. Set one variable in `config.py`:
+The [Quick start](#2-choose-your-paper-source) covers the basic switch. This section explains the trade-offs.
 
-```python
-PAPER_SOURCE: str = "benty"
-```
+**arXiv (default)** fetches papers from arXiv's RSS feeds and ranks them with the local LLM using your `preferences.md`. It needs no extra accounts and is the most robust option.
 
-When `PAPER_SOURCE = "benty"`, the **Fetch and Rank stages are both replaced** by a single authenticated scrape of your benty-fields daily page (the papers there are already sorted best-first by benty's ML personalization). Everything downstream — Process, TTS, Email — is identical:
+**benty-fields** replaces the **Fetch and Rank stages** with a single authenticated scrape of your benty-fields daily page (papers there are already sorted best-first by benty's ML personalization). Everything downstream — Process, TTS, Email — is identical:
 
 ```
 benty-fields.com  ─(login + scrape, already ranked)─▶  Process ──▶ TTS ──▶ Email
 ```
 
-What changes in this mode:
+What changes in benty mode:
 
 - **`CATEGORIES` in `config.py` is ignored** — benty uses your account's own subscription settings instead.
 - **The LLM ranking step is skipped entirely** — benty's ranking is used as-is. (ollama is still used for the Process/LaTeX-cleanup step, unless you also pass `--no-llm-clean`.)
-- **Two new secrets are required:** your benty-fields login.
-
-| Secret name      | Description                                                        |
-|------------------|-------------------------------------------------------------------|
-| `BENTY_EMAIL`    | The email address you log in to benty-fields with                 |
-| `BENTY_PASSWORD` | Your benty-fields password — **use a unique password**, not one reused on other accounts, since it is stored as a CI secret |
-
-Add them under **Settings → Secrets and variables → Actions** just like the SMTP secrets. Optionally, `BENTY_BASE_URL` overrides the site root (defaults to `https://www.benty-fields.com`).
+- **Two new secrets are required** — `BENTY_EMAIL` and `BENTY_PASSWORD` (see the [Quick start](#2-choose-your-paper-source)). Optionally `BENTY_BASE_URL` overrides the site root (defaults to `https://www.benty-fields.com`).
 
 > **A note on scraping:** this logs in to *your own* account and fetches one page per day — benty-fields' `robots.txt` permits it and the load is negligible. Because it scrapes rendered HTML (benty exposes no public API), it is inherently more fragile than the arXiv RSS path: if benty changes their page layout, this source may need updating. The arXiv source remains the robust default.
 
-Locally, set the same two environment variables before running:
+To run benty mode locally, set the two environment variables before running:
 
 ```bash
 export BENTY_EMAIL=you@example.com
 export BENTY_PASSWORD=your-benty-password
 python -m arxaudio.pipeline          # with PAPER_SOURCE="benty" in config.py
 ```
-
----
-
-## Quick start: fork and run in GitHub Actions
-
-### 1. Fork this repository
-
-Click **Fork** on GitHub. All subsequent steps are on your fork.
-
-### 2. Edit `config.py` — choose your arXiv categories
-
-Open `config.py` in your fork and update `CATEGORIES`:
-
-```python
-CATEGORIES: list[str] = [
-    "astro-ph.CO",   # Cosmology and Nongalactic Astrophysics
-    "cs.LG",         # Machine Learning
-]
-```
-
-The full list of valid category strings is at: https://arxiv.org/category_taxonomy
-
-### 3. Edit `preferences.md` — describe your research interests
-
-This plain-text (Markdown) file is passed verbatim to the ranking LLM. Write in natural language. Be specific about methods, surveys, and topics you care about. Include a "Not interested in" section to help the model focus. See the existing file for an example.
-
-### 4. Add repository secrets for email delivery
-
-Go to your fork on GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
-
-Add these five secrets:
-
-| Secret name     | Description                                      |
-|-----------------|--------------------------------------------------|
-| `SMTP_HOST`     | Your SMTP server, e.g. `smtp.gmail.com`          |
-| `SMTP_PORT`     | Port number, e.g. `587` (STARTTLS) or `465` (SSL) |
-| `SMTP_USER`     | Your full email address                          |
-| `SMTP_PASSWORD` | Your SMTP password or app password               |
-| `EMAIL_TO`      | Recipient address (can be the same as `SMTP_USER`) |
-
-(If you use `PAPER_SOURCE = "benty"`, also add `BENTY_EMAIL` and `BENTY_PASSWORD` — see the [benty-fields section](#alternative-paper-source-benty-fieldscom).)
-
-**Gmail walkthrough (recommended):** Gmail requires an App Password rather than your regular account password.
-1. Go to your Google Account → Security → 2-Step Verification (enable it if not already on).
-2. Search for "App passwords" in your Google Account settings.
-3. Create a new app password (name it "arxaudio" or similar).
-4. Use `smtp.gmail.com` as `SMTP_HOST`, `587` as `SMTP_PORT`, your Gmail address as `SMTP_USER`, and the generated 16-character app password as `SMTP_PASSWORD`.
-
-**Other providers:** Outlook/Hotmail uses `smtp.office365.com:587`; iCloud uses `smtp.mail.me.com:587`. Check that SMTP AUTH is enabled in your provider's account settings. For port 465, the pipeline uses `SMTP_SSL` automatically.
-
-### 5. Enable Actions on your fork
-
-Go to the **Actions** tab on your fork and click **"I understand my workflows, go ahead and enable them."**
-
-### 6. (Optional) Adjust the cron schedule
-
-The default schedule in `.github/workflows/daily.yml` is:
-
-```yaml
-- cron: "30 10 * * 1-5"
-```
-
-This runs at 10:30 UTC, Monday through Friday. arXiv announces new papers Monday–Friday at approximately 00:00 UTC (20:00 ET the previous evening), so any morning-UTC run picks up the fresh batch. Adjust to your preferred time using [crontab.guru](https://crontab.guru/). Note that all GitHub Actions cron times are UTC.
-
-### 7. Trigger a first run manually
-
-On the **Actions** tab, select **"arxaudio daily digest"**, then click **"Run workflow"**. Two optional inputs are available:
-
-| Input            | Description                                                   |
-|------------------|---------------------------------------------------------------|
-| `skip_email`     | Build the audio but do not send the email                     |
-
-The first run downloads the ollama model (~400 MB for `qwen2.5:0.5b`); subsequent runs restore it from the Actions cache and start much faster.
-
-The finished MP3 is also uploaded as a workflow artifact (retained for 14 days) under **Actions → your run → arxaudio-digest**, so you can download it even if email is not configured yet.
 
 ---
 
@@ -170,15 +197,10 @@ cd arxaudio
 pip install -e .
 ```
 
-### Pull the language model
+### Pull the language model and start the server
 
 ```bash
 ollama pull qwen2.5:0.5b
-```
-
-### Start the ollama server
-
-```bash
 ollama serve
 ```
 
@@ -224,13 +246,13 @@ This fetches papers, skips all LLM calls, and prints what would be synthesized �
 
 ## Configuration reference
 
-All user-facing settings live in `config.py` at the repository root. Do not put secrets there — SMTP credentials come from environment variables only.
+All user-facing settings live in `config.py` at the repository root. Do not put secrets there — SMTP and benty credentials come from environment variables only.
 
 ### config.py variables
 
 | Variable               | Default                             | Description                                                                                  |
 |------------------------|-------------------------------------|----------------------------------------------------------------------------------------------|
-| `PAPER_SOURCE`         | `"arxiv"`                           | Where papers come from: `"arxiv"` (RSS feeds + LLM ranking) or `"benty"` (benty-fields ML ranking; see the [benty-fields section](#alternative-paper-source-benty-fieldscom)). In `"benty"` mode `CATEGORIES` is ignored and `BENTY_EMAIL`/`BENTY_PASSWORD` env vars are required |
+| `PAPER_SOURCE`         | `"arxiv"`                           | Where papers come from: `"arxiv"` (RSS feeds + LLM ranking) or `"benty"` (benty-fields ML ranking; see the [details section](#paper-source-details-arxiv-vs-benty-fields)). In `"benty"` mode `CATEGORIES` is ignored and `BENTY_EMAIL`/`BENTY_PASSWORD` env vars are required |
 | `BENTY_BASE_URL`       | `"https://www.benty-fields.com"`    | (benty mode only) Override the benty-fields site root. Rarely needed                          |
 | `CATEGORIES`           | `["astro-ph.CO", "astro-ph.GA"]`    | arXiv categories to poll (ignored when `PAPER_SOURCE="benty"`). See https://arxiv.org/category_taxonomy |
 | `LLM_BACKEND`          | `"ollama"`                          | Which LLM backend to use. Currently `"ollama"`; extensible via the registry in `pipeline.py` |
@@ -241,10 +263,11 @@ All user-facing settings live in `config.py` at the repository root. Do not put 
 | `PAUSE_SECONDS`        | `1.2`                               | Silence gap in seconds between papers                                                        |
 | `MAX_PAPERS`           | `10`                                | Top N ranked papers get full audio; next N are listed in the email only. `0` means unlimited (all papers get audio, no email-only section) |
 | `EMAIL_SUBJECT_PREFIX` | `"ArXaudio Digest"`                 | Prepended to every email subject. The pipeline appends the date and paper count             |
+| `REPO_URL`             | `"https://github.com/James11222/arxaudio"` | Link shown in the email footer. Set this to your own fork                            |
 
 ### preferences.md
 
-A plain Markdown file read verbatim by the ranking LLM as its system context. Write in plain English. Describe topics, methods, surveys, and datasets you want to follow. Include a "Not interested in" section to sharpen the ranking. Changes take effect on the next run with no code changes required.
+A plain Markdown file read verbatim by the ranking LLM as its system context. Write in plain English. Describe topics, methods, surveys, and datasets you want to follow. Include a "Not interested in" section to sharpen the ranking. Changes take effect on the next run with no code changes required. (Ignored when `PAPER_SOURCE="benty"`.)
 
 ### math_replacements.md
 
@@ -278,7 +301,7 @@ Both are markdown tables parsed by `process.py`. **Extend the pipeline by editin
 | Symptom | Likely cause and fix |
 |---------|----------------------|
 | No email received | Check your spam folder. Verify the five secrets are set correctly in GitHub. If SMTP is only partially configured (e.g. `SMTP_HOST` set but `SMTP_PASSWORD` missing), the pipeline exits with an error — check the Actions log. |
-| Gmail authentication error | You must use an App Password, not your regular account password. See the Gmail walkthrough above. |
+| Gmail authentication error | You must use an App Password, not your regular account password. See the Gmail walkthrough in the [Quick start](#3-add-email-secrets). |
 | Zero papers in the output | arXiv announces new papers Monday through Friday only. Weekend and holiday runs see the most recent weekday mailing (or nothing new). Run locally with `--dry-run --verbose` to see what today's feed contains. |
 | No papers in the audio | The ranking LLM uses arrival order as a fallback, so this is unlikely unless `MAX_PAPERS` is set very low or no papers were fetched. Try running locally with `--dry-run --verbose` to see the ranking output. Sharpen your `preferences.md` to improve ranking quality. |
 | `ollama: connection refused` (local) | The ollama server is not running. Start it with `ollama serve` in a separate terminal. |

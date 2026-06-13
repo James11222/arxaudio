@@ -134,3 +134,12 @@ MAX_PAPERS: int = 10
 #   "ArXaudio Digest — 2026-06-11 (7 papers)"
 
 EMAIL_SUBJECT_PREFIX: str = "ArXaudio Digest"
+
+
+# ---------------------------------------------------------------------------
+# Repository link
+# ---------------------------------------------------------------------------
+# REPO_URL: shown in the email footer ("Sent by arxaudio").  When you fork
+# this project, point it at YOUR fork so the link in your digest is correct.
+
+REPO_URL: str = "https://github.com/James11222/arxaudio"

@@ -40,6 +40,7 @@ _DEFAULTS: dict[str, object] = {
     "PAUSE_SECONDS": 1.2,
     "MAX_PAPERS": 10,
     "EMAIL_SUBJECT_PREFIX": "ArXaudio Digest",
+    "REPO_URL": "https://github.com/James11222/arxaudio",
 }
 
 
@@ -68,6 +69,7 @@ class Settings:
 
     # Email
     email_subject_prefix: str = "ArXaudio Digest"
+    repo_url: str = "https://github.com/James11222/arxaudio"
 
     # benty-fields (populated from env vars — never stored in config.py)
     benty_base_url: str = "https://www.benty-fields.com"
@@ -243,6 +245,7 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         pause_seconds=float(get("PAUSE_SECONDS")),     # type: ignore[arg-type]
         max_papers=int(get("MAX_PAPERS")),             # type: ignore[arg-type]
         email_subject_prefix=str(get("EMAIL_SUBJECT_PREFIX")),
+        repo_url=str(get("REPO_URL")).rstrip("/"),
         # benty-fields credentials come from env vars, never from config.py
         benty_base_url=str(get("BENTY_BASE_URL")).rstrip("/"),
         benty_email=os.environ.get("BENTY_EMAIL", ""),
