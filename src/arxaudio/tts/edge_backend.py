@@ -25,12 +25,31 @@ logger = logging.getLogger(__name__)
 DEFAULT_VOICE = "en-US-AndrewNeural"
 
 
+def speed_to_rate(speed: float) -> str:
+    """Convert a playback-speed multiplier to an edge-tts ``rate`` string.
+
+    edge-tts expresses speech rate as a signed percentage relative to the
+    voice's normal pace (``"+0%"`` = normal, ``"+50%"`` = 1.5x, ``"-20%"`` =
+    0.8x). A multiplier of ``1.0`` maps to ``"+0%"``.
+
+    Args:
+        speed: Speed multiplier (e.g. ``0.8``, ``1.0``, ``1.5``, ``2.0``).
+
+    Returns:
+        A rate string such as ``"+50%"`` or ``"-20%"``.
+    """
+    percent = round((speed - 1.0) * 100)
+    return f"{percent:+d}%"
+
+
 class EdgeTTSBackend(TTSBackend):
     """Synthesize speech with Microsoft Edge's free neural TTS voices.
 
     Args:
         default_voice: Voice used when ``synthesize`` is called with an empty
             voice argument.
+        speed: Playback-speed multiplier (1.0 = normal). Converted to an
+            edge-tts ``rate`` percentage applied to every synthesis.
         max_attempts: Total synthesis attempts before giving up (>= 1).
         backoff_base: Seconds for the first retry sleep; doubles each retry.
     """
@@ -38,10 +57,12 @@ class EdgeTTSBackend(TTSBackend):
     def __init__(
         self,
         default_voice: str = DEFAULT_VOICE,
+        speed: float = 1.0,
         max_attempts: int = 3,
         backoff_base: float = 1.0,
     ) -> None:
         self.default_voice = default_voice
+        self.rate = speed_to_rate(speed)
         self.max_attempts = max(1, max_attempts)
         self.backoff_base = backoff_base
 
@@ -102,7 +123,7 @@ class EdgeTTSBackend(TTSBackend):
 
     async def _synthesize_async(self, text: str, voice: str, out_path: Path) -> None:
         """Stream one synthesis to ``out_path`` using the async edge-tts API."""
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(text, voice, rate=self.rate)
         await communicate.save(str(out_path))
 
     @staticmethod

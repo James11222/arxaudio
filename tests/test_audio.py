@@ -118,7 +118,8 @@ def test_one_tts_failure_does_not_kill_build(tmp_path, tiny_mp3_path):
     paper_fail = _make_paper("fail", keep=True)
     paper_ok2 = _make_paper("ok2", keep=True)
 
-    fail_text = paper_fail.spoken_text()
+    # paper_fail is the 2nd kept paper → narrated as "Paper 2".
+    fail_text = paper_fail.spoken_text(position=2)
     tts = FakeTTS(source_mp3=tiny_mp3_path, fail_on={fail_text})
 
     out = tmp_path / "daily.mp3"
@@ -133,7 +134,7 @@ def test_one_tts_failure_does_not_kill_build(tmp_path, tiny_mp3_path):
 def test_all_papers_fail_tts_returns_none(tmp_path, tiny_mp3_path):
     """If every paper's TTS fails, build_daily_audio returns None."""
     paper = _make_paper("fail1", keep=True)
-    fail_text = paper.spoken_text()
+    fail_text = paper.spoken_text(position=1)
     tts = FakeTTS(source_mp3=tiny_mp3_path, fail_on={fail_text})
     out = tmp_path / "daily.mp3"
     result = build_daily_audio([paper], tts, "v", out)

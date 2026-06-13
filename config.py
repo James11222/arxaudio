@@ -91,6 +91,12 @@ TTS_BACKEND: str = "edge"
 
 TTS_VOICE: str = "en-US-AndrewNeural"
 
+# TTS_SPEED: narration speed multiplier relative to the voice's normal pace.
+#   1.0  = normal,  0.8 = slower,  1.2 / 1.5 = faster,  2.0 = double speed.
+# Applied to every paper in the audio.  Useful range is roughly 0.5–2.0.
+
+TTS_SPEED: float = 1.2
+
 
 # ---------------------------------------------------------------------------
 # Audio output limits
@@ -134,3 +140,12 @@ MAX_PAPERS: int = 10
 #   "ArXaudio Digest — 2026-06-11 (7 papers)"
 
 EMAIL_SUBJECT_PREFIX: str = "ArXaudio Digest"
+
+
+# ---------------------------------------------------------------------------
+# Repository link
+# ---------------------------------------------------------------------------
+# REPO_URL: shown in the email footer ("Sent by arxaudio").  When you fork
+# this project, point it at YOUR fork so the link in your digest is correct.
+
+REPO_URL: str = "https://github.com/James11222/arxaudio"

@@ -14,9 +14,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from arxaudio.emailer import send_digest, _build_subject, _build_body
+from arxaudio.emailer import (
+    send_digest,
+    _build_subject,
+    _build_body,
+    _build_html_body,
+)
 from arxaudio.models import Paper
 from arxaudio.settings import Settings
+
+REPO_URL = "https://github.com/James11222/arxaudio"
 
 
 # ---------------------------------------------------------------------------
@@ -151,26 +158,26 @@ def test_subject_count_uses_audio_papers_only():
 # ---------------------------------------------------------------------------
 
 def test_build_body_audio_section_present():
-    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [PAPER_EXTRA1])
+    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [PAPER_EXTRA1], REPO_URL)
     assert "In today's audio:" in body
     assert PAPER_MULTI.title in body
     assert PAPER_SINGLE.title in body
 
 
 def test_build_body_extra_section_present_with_divider():
-    body = _build_body([PAPER_MULTI], [PAPER_EXTRA1, PAPER_EXTRA2])
+    body = _build_body([PAPER_MULTI], [PAPER_EXTRA1, PAPER_EXTRA2], REPO_URL)
     assert "More new papers (not in the audio):" in body
     assert PAPER_EXTRA1.title in body
     assert PAPER_EXTRA2.title in body
-    # Divider is a row of dashes
-    assert "---" in body
+    # Section headers are underlined with a row of '=' characters
+    assert "===" in body
 
 
 def test_build_body_numbering_continues_across_divider():
     """Extra papers numbered starting after the last audio paper."""
     audio = [PAPER_MULTI, PAPER_SINGLE]   # 1, 2
     extra = [PAPER_EXTRA1, PAPER_EXTRA2]  # should be 3, 4
-    body = _build_body(audio, extra)
+    body = _build_body(audio, extra, REPO_URL)
     lines = body.splitlines()
 
     # Find lines containing each title and check the leading number
@@ -189,13 +196,13 @@ def test_build_body_numbering_continues_across_divider():
 
 
 def test_build_body_first_author_and_url_present():
-    body = _build_body([PAPER_MULTI], [])
+    body = _build_body([PAPER_MULTI], [], REPO_URL)
     assert PAPER_MULTI.first_author in body
     assert PAPER_MULTI.url in body
 
 
 def test_build_body_et_al_only_for_multi_author():
-    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [])
+    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [], REPO_URL)
     # PAPER_MULTI has 2 authors → "et al." expected
     # PAPER_SINGLE has 1 author  → "et al." must NOT appear near that entry
     lines = body.splitlines()
@@ -212,26 +219,66 @@ def test_build_body_et_al_only_for_multi_author():
 
 
 def test_build_body_url_format():
-    body = _build_body([PAPER_MULTI], [])
+    body = _build_body([PAPER_MULTI], [], REPO_URL)
     assert f"https://arxiv.org/abs/{PAPER_MULTI.arxiv_id}" in body
 
 
 def test_build_body_no_extra_omits_divider_and_second_section():
-    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [])
+    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [], REPO_URL)
     assert "More new papers" not in body
     # Should not have a second divider beyond the audio section header line
     assert body.count("---------------------------------------------") == 0
 
 
 def test_build_body_contains_count():
-    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [])
+    body = _build_body([PAPER_MULTI, PAPER_SINGLE], [], REPO_URL)
     assert "2" in body
 
 
 def test_build_body_footer_present():
-    body = _build_body([PAPER_MULTI], [])
+    body = _build_body([PAPER_MULTI], [], REPO_URL)
     assert "Happy" in body
     assert "arxaudio" in body
+
+
+def test_build_body_footer_uses_repo_url():
+    body = _build_body([PAPER_MULTI], [], REPO_URL)
+    assert REPO_URL in body
+    # The old hard-coded owner must be gone.
+    assert "jsunseri" not in body
+
+
+# ---------------------------------------------------------------------------
+# Test _build_html_body
+# ---------------------------------------------------------------------------
+
+def test_build_html_body_is_html():
+    html = _build_html_body([PAPER_MULTI, PAPER_SINGLE], [PAPER_EXTRA1], REPO_URL)
+    assert "<html>" in html.lower()
+    assert PAPER_MULTI.title in html
+    assert PAPER_SINGLE.title in html
+    assert PAPER_EXTRA1.title in html
+
+
+def test_build_html_body_uses_repo_url():
+    html = _build_html_body([PAPER_MULTI], [], REPO_URL)
+    assert REPO_URL in html
+    assert "jsunseri" not in html
+
+
+def test_build_html_body_links_and_authors():
+    html = _build_html_body([PAPER_MULTI], [], REPO_URL)
+    assert PAPER_MULTI.url in html
+    assert PAPER_MULTI.first_author in html
+    assert "et al." in html
+
+
+def test_build_html_body_escapes_titles():
+    nasty = _paper("2606.09999", "Tension in <H0> & the CMB", ["Doe, Jane"])
+    html = _build_html_body([nasty], [], REPO_URL)
+    assert "<H0>" not in html
+    assert "&lt;H0&gt;" in html
+    assert "&amp;" in html
 
 
 # ---------------------------------------------------------------------------

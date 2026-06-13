@@ -43,10 +43,40 @@ class Paper:
     def url(self) -> str:
         return f"https://arxiv.org/abs/{self.arxiv_id}"
 
-    def spoken_text(self) -> str:
-        """The full text read aloud for this paper."""
+    @property
+    def spoken_author(self) -> str:
+        """Author phrase for narration: 'First Author et al.' / 'First Author'."""
+        if not self.authors:
+            return "unknown authors"
+        if len(self.authors) > 1:
+            return f"{self.first_author} et al."
+        return self.first_author
+
+    def spoken_text(self, position: int | None = None) -> str:
+        """The full text read aloud for this paper.
+
+        When ``position`` (1-based) is given, the text opens with a spoken
+        announcement of where this paper falls in the running order so the
+        listener can keep track, e.g.::
+
+            "Paper 1: <title>, written by Hou-Zun Chen et al. The abstract
+             reads: ..."
+
+        Without ``position`` the older bare form
+        ``"<title>. by <author>[ et al]. <abstract>"`` is returned.
+        """
         title = self.clean_title or self.title
         abstract = self.clean_abstract or self.abstract
+
+        if position is not None:
+            author = self.spoken_author
+            # spoken_author already ends with "." after "et al."; avoid "..".
+            sep = "" if author.endswith(".") else "."
+            return (
+                f"Paper {position}: {title}, written by {author}{sep} "
+                f"The abstract reads: {abstract}"
+            )
+
         byline = f"by {self.first_author}"
         if len(self.authors) > 1:
             byline += " et al"
