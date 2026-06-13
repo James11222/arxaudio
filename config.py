@@ -14,7 +14,36 @@
 #   SMTP_PASSWORD    app password or SMTP password
 #   EMAIL_TO         recipient address (defaults to SMTP_USER)
 #   EMAIL_FROM       sender address  (defaults to SMTP_USER)
+#
+# Required env vars when PAPER_SOURCE = "benty":
+#   BENTY_EMAIL      your benty-fields.com login email
+#   BENTY_PASSWORD   your benty-fields.com password (use a unique password,
+#                    not one reused elsewhere; add as a GitHub Secret in CI)
+#   BENTY_BASE_URL   (optional) override the benty-fields base URL;
+#                    defaults to https://www.benty-fields.com
 # =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# Paper source
+# ---------------------------------------------------------------------------
+# PAPER_SOURCE controls where daily papers come from:
+#
+#   "arxiv"  (default) — fetch from arXiv RSS feeds for the CATEGORIES below,
+#            then rank with the local LLM using your preferences.md.
+#            No additional credentials needed.
+#
+#   "benty"  — fetch the day's papers already ML-ranked from your personal
+#            benty-fields.com account (https://www.benty-fields.com).
+#            In this mode CATEGORIES is IGNORED — benty uses your account's
+#            subscription settings — and the LLM ranking step is skipped.
+#            Requires two environment variables / GitHub Secrets:
+#              BENTY_EMAIL      your benty-fields login email
+#              BENTY_PASSWORD   your benty-fields password (use a UNIQUE
+#                               password not reused elsewhere)
+#            Optionally set BENTY_BASE_URL to override the default base URL.
+
+PAPER_SOURCE: str = "benty"  # "arxiv" or "benty"
 
 
 # ---------------------------------------------------------------------------
@@ -22,6 +51,7 @@
 # ---------------------------------------------------------------------------
 # Full list of arXiv categories: https://arxiv.org/category_taxonomy
 # Add or remove entries to control which feeds are polled.
+# (Used only when PAPER_SOURCE = "arxiv"; ignored in benty mode.)
 
 CATEGORIES: list[str] = [
     "astro-ph.CO",   # Cosmology and Nongalactic Astrophysics
