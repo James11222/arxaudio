@@ -130,6 +130,8 @@ jobs:
           # Benty scraper credentials — only needed when PAPER_SOURCE="benty" in config.py
           BENTY_EMAIL: ${{ secrets.BENTY_EMAIL }}
           BENTY_PASSWORD: ${{ secrets.BENTY_PASSWORD }}
+          # NotebookLM authentication — only needed when TTS_BACKEND="notebooklm" in config.py
+          NOTEBOOKLM_AUTH_JSON: ${{ secrets.NOTEBOOKLM_AUTH_JSON }}
         run: |
           ARGS=()
           # workflow_dispatch optional inputs → CLI flags.
