@@ -99,6 +99,60 @@ TTS_SPEED: float = 1.2
 
 
 # ---------------------------------------------------------------------------
+# NotebookLM TTS backend settings
+# ---------------------------------------------------------------------------
+# Only used when TTS_BACKEND = "notebooklm".
+#
+# Required env var / GitHub Secret when notebookLM is active:
+#   NOTEBOOKLM_AUTH_JSON  — JSON string containing Google session cookies.
+#                          Obtain by running:  notebooklm login
+#                          then copy from:     ~/.notebooklm/storage_state.json
+#                          Add as a GitHub Actions Secret on your fork.
+#
+# notebooklm-py must be installed:  pip install ".[notebooklm]"
+#   (or:  pip install "notebooklm-py>=0.8")
+
+# NOTEBOOKLM_AUDIO_FORMAT: the style of audio overview to generate.
+#   "brief"      — concise overview (recommended for daily digests)
+#   "deep-dive"  — longer, more detailed conversation
+#   "critique"   — critical analysis
+#   "debate"     — multiple perspectives
+
+NOTEBOOKLM_AUDIO_FORMAT: str = "brief"
+
+# NOTEBOOKLM_AUDIO_LENGTH: length of the generated audio.
+#   "short", "default", "long"
+
+NOTEBOOKLM_AUDIO_LENGTH: str = "default"
+
+# NOTEBOOKLM_INSTRUCTIONS: custom instructions fed to notebookLM.
+# The default prompt is optimised for an expert astrophysics audience.
+# Customise freely — this is the only prompt the notebookLM backend uses.
+
+NOTEBOOKLM_INSTRUCTIONS: str = (
+    "You are generating a daily arXiv digest for an expert audience of "
+    "postdoctoral researchers and senior PhD students in astrophysics and "
+    "cosmology. For each paper in the sources, announce the paper title and "
+    "first author's name, then give the key takeaways of the abstract in 2-4 "
+    "concise sentences. Each paper must get its own self-contained segment. "
+    "Do NOT compare papers to each other, and do NOT group papers by theme. "
+    "Be precise and technical; the audience is already familiar with standard "
+    "methods and terminology in the field."
+)
+
+# NOTEBOOKLM_DELETE_NOTEBOOK: whether to delete the notebook from notebookLM
+# after the audio file has been downloaded.  True keeps your notebookLM
+# workspace tidy; False lets you inspect the notebook afterwards.
+
+NOTEBOOKLM_DELETE_NOTEBOOK: bool = True
+
+# NOTEBOOKLM_TIMEOUT: maximum seconds to wait for notebookLM to finish
+# generating the audio overview.  Generation typically takes 2-5 minutes.
+
+NOTEBOOKLM_TIMEOUT: int = 600
+
+
+# ---------------------------------------------------------------------------
 # Audio output limits
 # ---------------------------------------------------------------------------
 # MAX_MB: maximum size of the final MP3 in megabytes.
