@@ -101,14 +101,14 @@ REPO_URL = "https://github.com/your-username/arxaudio"
 
 The first run downloads the local AI model (~400 MB) and takes 10–15 minutes; later runs restore it from cache and are much faster. The finished MP3 is emailed to you *and* saved as a workflow artifact (under **Actions → your run → arxaudio-digest**, kept 14 days) so you can grab it even before email is working.
 
-That's it — by default it now runs automatically every weekday at 10:30 UTC.
+That's it — by default it now runs automatically every weekday at 10:37 UTC.
 
 ### 6. (Optional) Change the schedule
 
 Edit the cron line in `.github/workflows/daily.yml`:
 
 ```yaml
-- cron: "30 10 * * 1-5"   # 10:30 UTC, Mon–Fri
+- cron: "37 10 * * 1-5"   # 10:37 UTC, Mon–Fri
 ```
 
 arXiv announces new papers Mon–Fri around 00:00 UTC, so any morning-UTC run catches the fresh batch. Build your own time with [crontab.guru](https://crontab.guru/) (all GitHub Actions cron times are UTC).
