@@ -299,6 +299,126 @@ Both are markdown tables parsed by `process.py`. **Extend the pipeline by editin
 
 ---
 
+## NotebookLM TTS backend (AI-generated podcast)
+
+> ⚠️ This uses the **unofficial** [notebooklm-py](https://github.com/teng-lin/notebooklm-py) library.  Google can change their internal API without notice.  Best for personal use and research.
+
+Instead of the default Microsoft Edge TTS (which reads each abstract aloud one at a time), the **notebookLM backend** sends all selected papers to Google NotebookLM and requests a single AI-generated Audio Overview — a podcast-style conversation that covers each paper's key takeaways for an expert audience.
+
+### What changes with this backend
+
+| | Edge TTS (default) | NotebookLM |
+|---|---|---|
+| Audio style | Synthetic narration, one abstract per segment | Natural podcast conversation |
+| Processing | Per-paper Edge TTS + ffmpeg concat | Single NotebookLM Audio Overview |
+| LLM cleanup | ollama math-cleanup pass | **None** (notebookLM handles it) |
+| Internet required | Edge TTS endpoint | Google NotebookLM |
+| Benty + notebookLM | ollama still used for math cleanup | **Zero local LLM usage** |
+| Generation time | ~30 s for 10 papers | ~2–5 minutes |
+
+When `PAPER_SOURCE="benty"` + `TTS_BACKEND="notebooklm"`, **no local AI model (ollama) is needed at all**.
+
+### Setup (one-time, on your local machine)
+
+#### 1. Install notebooklm-py
+
+```bash
+pip install "notebooklm-py[browser]>=0.8"
+```
+
+This installs Playwright and downloads Chromium (~170 MB) on first use.
+
+#### 2. Log in to NotebookLM
+
+```bash
+notebooklm login
+```
+
+A browser window opens — sign in with your Google account.  Cookies are saved to `~/.notebooklm/storage_state.json`.
+
+Verify the login worked:
+
+```bash
+notebooklm auth check --test
+```
+
+You should see `"status": "ok"`.
+
+#### 3. Copy the auth JSON
+
+```bash
+cat ~/.notebooklm/storage_state.json
+```
+
+Copy the entire JSON output.
+
+#### 4. Add `NOTEBOOKLM_AUTH_JSON` as a GitHub Secret
+
+On your fork: **Settings → Secrets and variables → Actions → New repository secret**.
+
+| Secret name | Value |
+|---|---|
+| `NOTEBOOKLM_AUTH_JSON` | The full JSON you copied in step 3 |
+
+> **Security note:** This JSON contains your Google session cookies.  Treat it like a password.  Use a dedicated Google account if you prefer.
+
+### Configure config.py
+
+```python
+# Switch to NotebookLM audio generation
+TTS_BACKEND: str = "notebooklm"
+
+# Optional: customise the audio style
+NOTEBOOKLM_AUDIO_FORMAT: str = "brief"    # "brief", "deep-dive", "critique", "debate"
+NOTEBOOKLM_AUDIO_LENGTH: str = "default"  # "short", "default", "long"
+
+# Optional: edit the instructions prompt (default is optimised for astrophysics)
+NOTEBOOKLM_INSTRUCTIONS: str = (
+    "You are generating a daily arXiv digest for an expert audience of "
+    "postdoctoral researchers and senior PhD students in astrophysics and "
+    "cosmology. For each paper in the sources, announce the paper title and "
+    "first author's name, then give the key takeaways of the abstract in 2-4 "
+    "concise sentences. Each paper must get its own self-contained segment. "
+    "Do NOT compare papers to each other, and do NOT group papers by theme. "
+    "Be precise and technical; the audience is already familiar with standard "
+    "methods and terminology in the field."
+)
+
+# Delete the NotebookLM notebook after audio is downloaded (keeps workspace tidy)
+NOTEBOOKLM_DELETE_NOTEBOOK: bool = True
+
+# Maximum seconds to wait for NotebookLM to finish (generation takes 2-5 min)
+NOTEBOOKLM_TIMEOUT: int = 600
+```
+
+`TTS_VOICE` and `TTS_SPEED` are **ignored** when `TTS_BACKEND="notebooklm"`.
+
+### Install the optional dependency in CI
+
+Your fork's workflow needs the extra dependency.  If you don't want to edit the workflow file, you can also add it as a pip install step:
+
+In `.github/workflows/daily.yml`, change the pip install step from:
+```yaml
+- run: pip install -e ".[dev]"
+```
+to:
+```yaml
+- run: pip install -e ".[dev,notebooklm]"
+```
+
+### Keeping your auth fresh
+
+NotebookLM session cookies typically last several weeks.  When a run fails with an auth error, re-run `notebooklm login` on your local machine and update the `NOTEBOOKLM_AUTH_JSON` secret with the new cookie JSON.
+
+### Limitations
+
+- **Unofficial API** — Google can change internal endpoints without notice.
+- **Generation time** — NotebookLM takes 2–5 minutes to generate audio (vs ~30 s for Edge TTS).  Set `NOTEBOOKLM_TIMEOUT` higher if runs time out.
+- **One audio file** — You get a single podcast per run, not a separate segment per paper.  The `MAX_MB` size budget and ffmpeg re-encoding are **not applied** (notebookLM controls the output format).
+- **Language** — Defaults to English.  If you need another language, use the Edge TTS backend.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause and fix |

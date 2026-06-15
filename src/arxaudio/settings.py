@@ -42,6 +42,20 @@ _DEFAULTS: dict[str, object] = {
     "MAX_PAPERS": 10,
     "EMAIL_SUBJECT_PREFIX": "ArXaudio Digest",
     "REPO_URL": "https://github.com/James11222/arxaudio",
+    "NOTEBOOKLM_AUDIO_FORMAT": "brief",
+    "NOTEBOOKLM_AUDIO_LENGTH": "default",
+    "NOTEBOOKLM_INSTRUCTIONS": (
+        "You are generating a daily arXiv digest for an expert audience of "
+        "postdoctoral researchers and senior PhD students in astrophysics and "
+        "cosmology. For each paper in the sources, announce the paper title and "
+        "first author's name, then give the key takeaways of the abstract in 2-4 "
+        "concise sentences. Each paper must get its own self-contained segment. "
+        "Do NOT compare papers to each other, and do NOT group papers by theme. "
+        "Be precise and technical; the audience is already familiar with standard "
+        "methods and terminology in the field."
+    ),
+    "NOTEBOOKLM_DELETE_NOTEBOOK": True,
+    "NOTEBOOKLM_TIMEOUT": 600,
 }
 
 
@@ -86,6 +100,14 @@ class Settings:
     email_to: str = ""
     email_from: str = ""
 
+    # NotebookLM (populated from config.py + NOTEBOOKLM_AUTH_JSON env var)
+    notebooklm_audio_format: str = "brief"
+    notebooklm_audio_length: str = "default"
+    notebooklm_instructions: str = ""
+    notebooklm_delete_notebook: bool = True
+    notebooklm_timeout: int = 600
+    notebooklm_auth_json: str = ""  # from NOTEBOOKLM_AUTH_JSON env var
+
     # -----------------------------------------------------------------------
     # Derived helpers
     # -----------------------------------------------------------------------
@@ -103,6 +125,11 @@ class Settings:
             and self.smtp_user
             and self.smtp_password
         )
+
+    @property
+    def notebooklm_configured(self) -> bool:
+        """Return True if notebookLM auth credentials are present."""
+        return bool(self.notebooklm_auth_json)
 
     @property
     def effective_email_to(self) -> str:
@@ -204,6 +231,28 @@ def _validate(settings: Settings, config_path: Path) -> None:
             f"MAX_PAPERS must be 0 (unlimited) or a positive integer "
             f"(got {settings.max_papers!r})."
         )
+    if settings.tts_backend == "notebooklm" and not settings.notebooklm_configured:
+        raise ValueError(
+            "TTS_BACKEND is set to 'notebooklm' but the required credentials are "
+            "missing.  Set the NOTEBOOKLM_AUTH_JSON environment variable to the "
+            "contents of your notebooklm storage_state.json file.  "
+            "Obtain it by running:  notebooklm login  "
+            "then reading:  ~/.notebooklm/storage_state.json  "
+            "In GitHub Actions, add it as a repository Secret.  "
+            "Do NOT put credentials in config.py."
+        )
+    valid_notebooklm_formats = {"brief", "deep-dive", "critique", "debate"}
+    if settings.tts_backend == "notebooklm" and settings.notebooklm_audio_format not in valid_notebooklm_formats:
+        raise ValueError(
+            f"NOTEBOOKLM_AUDIO_FORMAT must be one of {sorted(valid_notebooklm_formats)} "
+            f"(got {settings.notebooklm_audio_format!r})."
+        )
+    valid_notebooklm_lengths = {"short", "default", "long"}
+    if settings.tts_backend == "notebooklm" and settings.notebooklm_audio_length not in valid_notebooklm_lengths:
+        raise ValueError(
+            f"NOTEBOOKLM_AUDIO_LENGTH must be one of {sorted(valid_notebooklm_lengths)} "
+            f"(got {settings.notebooklm_audio_length!r})."
+        )
 
 
 def load_settings(config_path: str | Path | None = None) -> Settings:
@@ -265,6 +314,13 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         smtp_password=os.environ.get("SMTP_PASSWORD", ""),
         email_to=os.environ.get("EMAIL_TO", ""),
         email_from=os.environ.get("EMAIL_FROM", ""),
+        # NotebookLM settings
+        notebooklm_audio_format=str(get("NOTEBOOKLM_AUDIO_FORMAT")),
+        notebooklm_audio_length=str(get("NOTEBOOKLM_AUDIO_LENGTH")),
+        notebooklm_instructions=str(get("NOTEBOOKLM_INSTRUCTIONS")),
+        notebooklm_delete_notebook=bool(get("NOTEBOOKLM_DELETE_NOTEBOOK")),
+        notebooklm_timeout=int(get("NOTEBOOKLM_TIMEOUT")),  # type: ignore[arg-type]
+        notebooklm_auth_json=os.environ.get("NOTEBOOKLM_AUTH_JSON", ""),
     )
 
     _validate(settings, resolved)

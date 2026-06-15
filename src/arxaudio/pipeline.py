@@ -48,7 +48,7 @@ from arxaudio.llm.base import LLMBackend, LLMError
 from arxaudio.llm.ollama_backend import OllamaBackend
 from arxaudio.models import Paper
 from arxaudio.settings import Settings, load_settings
-from arxaudio.tts.base import TTSBackend
+from arxaudio.tts.base import DirectAudioBackend, TTSBackend
 from arxaudio.tts.edge_backend import EdgeTTSBackend
 
 logger = logging.getLogger("arxaudio")
@@ -77,8 +77,23 @@ _LLM_REGISTRY: dict[str, "callable[[Settings], LLMBackend]"] = {
     "ollama": lambda s: OllamaBackend(model=s.ollama_model),
 }
 
-_TTS_REGISTRY: dict[str, "callable[[Settings], TTSBackend]"] = {
+
+def _make_notebooklm_backend(settings: "Settings") -> "DirectAudioBackend":
+    """Lazy-import factory for the optional NotebookLM backend."""
+    try:
+        from arxaudio.tts.notebooklm_backend import NotebookLMTTSBackend
+    except ImportError as exc:
+        raise ValueError(
+            "TTS_BACKEND is set to 'notebooklm' but notebooklm-py is not installed. "
+            "Install it with:  pip install 'notebooklm-py>=0.8'  "
+            "or:  pip install '.[notebooklm]'"
+        ) from exc
+    return NotebookLMTTSBackend(settings)
+
+
+_TTS_REGISTRY: dict[str, "callable[[Settings], TTSBackend | DirectAudioBackend]"] = {
     "edge": lambda s: EdgeTTSBackend(default_voice=s.tts_voice, speed=s.tts_speed),
+    "notebooklm": lambda s: _make_notebooklm_backend(s),
 }
 
 
@@ -95,8 +110,12 @@ def make_llm(settings: Settings) -> LLMBackend:
     return factory(settings)
 
 
-def make_tts(settings: Settings) -> TTSBackend:
-    """Construct the configured TTS backend (``settings.tts_backend``)."""
+def make_tts(settings: Settings) -> "TTSBackend | DirectAudioBackend":
+    """Construct the configured TTS backend (``settings.tts_backend``).
+    
+    Returns either a TTSBackend (for segment-by-segment synthesis) or a
+    DirectAudioBackend (for batch generation of the entire audio file).
+    """
     try:
         factory = _TTS_REGISTRY[settings.tts_backend]
     except KeyError:
@@ -276,11 +295,18 @@ def run(args: argparse.Namespace) -> int:
     output_path = Path(args.output) if args.output else _default_output()
 
     benty_mode = settings.paper_source == "benty"
+    notebooklm_mode = settings.tts_backend == "notebooklm"
 
-    # In benty mode the ranking comes pre-computed by benty's ML model and never
-    # touches the LLM, so the only LLM use is the process/clean step. A benty +
-    # --no-llm-clean run therefore needs no ollama at all (health check skipped).
-    if benty_mode:
+    # In notebookLM mode the TTS backend handles text formatting internally, so
+    # the LLM math-cleanup pass (process stage) is skipped regardless of flags.
+    # In benty mode ranking is pre-computed, so only the clean step may need LLM.
+    if notebooklm_mode:
+        # No LLM needed for cleanup; only arXiv mode still needs ranking.
+        if benty_mode:
+            needs_llm = False
+        else:
+            needs_llm = not args.no_rank
+    elif benty_mode:
         needs_llm = not args.no_llm_clean
     else:
         needs_llm = not (args.no_rank and args.no_llm_clean)
@@ -354,7 +380,15 @@ def run(args: argparse.Namespace) -> int:
         logger.info("EMAIL-ONLY %s — %s", paper.arxiv_id, paper.title)
 
     # --- Process (math cleanup) -----------------------------------------
-    if args.no_llm_clean:
+    # Skipped entirely when the notebookLM backend is active: NotebookLM
+    # generates audio from the raw title/author/abstract text directly (it
+    # handles scientific notation internally), so math cleanup adds no value.
+    if notebooklm_mode:
+        logger.info(
+            "Process stage skipped (TTS_BACKEND=notebooklm): "
+            "NotebookLM handles text formatting."
+        )
+    elif args.no_llm_clean:
         logger.info("LLM clean skipped (--no-llm-clean): regex-only math cleanup.")
         _regex_only_clean(kept)
     else:
@@ -384,16 +418,33 @@ def run(args: argparse.Namespace) -> int:
     # --- TTS / audio ----------------------------------------------------
     tts = make_tts(settings)
     today_human = date.today().strftime("%B %-d, %Y")
-    intro_text = f"Arx audio digest for {today_human}. {len(kept)} papers."
-    mp3_path = audio.build_daily_audio(
-        kept,
-        tts,
-        voice=settings.tts_voice,
-        out_path=output_path,
-        max_mb=settings.max_mb,
-        pause_seconds=settings.pause_seconds,
-        intro_text=intro_text,
-    )
+
+    if isinstance(tts, DirectAudioBackend):
+        # Batch backends (e.g. notebookLM) generate a single audio file for
+        # all papers in one call.  No per-paper segment, no intro, no ffmpeg.
+        logger.info(
+            "Using DirectAudioBackend (%s) to generate a single audio file "
+            "for %d papers.",
+            type(tts).__name__,
+            len(kept),
+        )
+        try:
+            tts.generate_audio(kept, output_path)
+            mp3_path: Path | None = output_path
+        except Exception as exc:  # noqa: BLE001 - surface as systemic failure
+            logger.error("DirectAudioBackend failed: %s", exc)
+            mp3_path = None
+    else:
+        intro_text = f"Arx audio digest for {today_human}. {len(kept)} papers."
+        mp3_path = audio.build_daily_audio(
+            kept,
+            tts,
+            voice=settings.tts_voice,
+            out_path=output_path,
+            max_mb=settings.max_mb,
+            pause_seconds=settings.pause_seconds,
+            intro_text=intro_text,
+        )
 
     if mp3_path is None:
         logger.warning(
