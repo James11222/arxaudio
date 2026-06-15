@@ -82,7 +82,7 @@ OLLAMA_MODEL: str = "qwen2.5:1.5b"
 #   "edge"  — Microsoft Edge TTS via edge-tts (free, no API key needed)
 #   Future options: "coqui", "piper"
 
-TTS_BACKEND: str = "edge"
+TTS_BACKEND: str = "notebooklm"
 
 # TTS_VOICE: voice identifier for Edge TTS.
 # Browse available voices:  edge-tts --list-voices
@@ -133,7 +133,7 @@ NOTEBOOKLM_INSTRUCTIONS: str = (
     "You are generating a daily arXiv digest for an expert audience of "
     "postdoctoral researchers and senior PhD students in astrophysics and "
     "cosmology. For each paper in the sources, announce the paper title and "
-    "first author's name, then give the key takeaways of the abstract in 2-4 "
+    "first author's name, then give the key takeaways of the abstract in 5-6 "
     "concise sentences. Each paper must get its own self-contained segment. "
     "Do NOT compare papers to each other, and do NOT group papers by theme. "
     "Be precise and technical; the audience is already familiar with standard "
