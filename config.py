@@ -123,7 +123,7 @@ NOTEBOOKLM_AUDIO_FORMAT: str = "deep-dive"
 # NOTEBOOKLM_AUDIO_LENGTH: length of the generated audio.
 #   "short", "default", "long"
 
-NOTEBOOKLM_AUDIO_LENGTH: str = "long"
+NOTEBOOKLM_AUDIO_LENGTH: str = "default"
 
 # NOTEBOOKLM_INSTRUCTIONS: custom instructions fed to notebookLM.
 # The default prompt is optimised for an expert astrophysics audience.
@@ -149,7 +149,7 @@ NOTEBOOKLM_DELETE_NOTEBOOK: bool = True
 # NOTEBOOKLM_TIMEOUT: maximum seconds to wait for notebookLM to finish
 # generating the audio overview.  Generation typically takes 2-5 minutes.
 
-NOTEBOOKLM_TIMEOUT: int = 600
+NOTEBOOKLM_TIMEOUT: int = 1200
 
 
 # ---------------------------------------------------------------------------
