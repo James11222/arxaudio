@@ -118,12 +118,12 @@ TTS_SPEED: float = 1.2
 #   "critique"   — critical analysis
 #   "debate"     — multiple perspectives
 
-NOTEBOOKLM_AUDIO_FORMAT: str = "brief"
+NOTEBOOKLM_AUDIO_FORMAT: str = "deep-dive"
 
 # NOTEBOOKLM_AUDIO_LENGTH: length of the generated audio.
 #   "short", "default", "long"
 
-NOTEBOOKLM_AUDIO_LENGTH: str = "default"
+NOTEBOOKLM_AUDIO_LENGTH: str = "long"
 
 # NOTEBOOKLM_INSTRUCTIONS: custom instructions fed to notebookLM.
 # The default prompt is optimised for an expert astrophysics audience.
@@ -133,8 +133,8 @@ NOTEBOOKLM_INSTRUCTIONS: str = (
     "You are generating a daily arXiv digest for an expert audience of "
     "postdoctoral researchers and senior PhD students in astrophysics and "
     "cosmology. For each paper in the sources, announce the paper title and "
-    "first author's name, then give the key takeaways of the abstract in 5-6 "
-    "concise sentences. Each paper must get its own self-contained segment. "
+    "first author's name, then give the key takeaways of the abstract. "
+    "Each paper should get its own self-contained segment. "
     "Do NOT compare papers to each other, and do NOT group papers by theme. "
     "Be precise and technical; the audience is already familiar with standard "
     "methods and terminology in the field."
