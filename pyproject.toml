@@ -16,7 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 notebooklm = [
-    "notebooklm-py>=0.8",
+    "notebooklm-py>=0.7",
 ]
 dev = [
     "pytest>=8",
