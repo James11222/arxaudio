@@ -53,7 +53,7 @@ jobs:
           cache: pip
 
       - name: Install arxaudio
-        run: pip install -e .
+        run: pip install -e ".[notebooklm]"
 
       - name: Install ffmpeg
         run: |
