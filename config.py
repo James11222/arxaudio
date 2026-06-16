@@ -82,7 +82,7 @@ OLLAMA_MODEL: str = "qwen2.5:1.5b"
 #   "edge"  — Microsoft Edge TTS via edge-tts (free, no API key needed)
 #   Future options: "coqui", "piper"
 
-TTS_BACKEND: str = "notebooklm"
+TTS_BACKEND: str = "edge"
 
 # TTS_VOICE: voice identifier for Edge TTS.
 # Browse available voices:  edge-tts --list-voices
