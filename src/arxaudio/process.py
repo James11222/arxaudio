@@ -81,12 +81,21 @@ _FEWSHOT_EXAMPLES = [
     (
         "We find $H_0 \\approx 70$ km/s/Mpc with $\\chi^2 < 1$.",
         "We find H naught approximately equal to 70 kilometers per second per "
-        "megaparsec with chi squared less than 1.",
+        "megaparsec with kai squared less than 1.",
     ),
     (
         "Velocity dispersions span $\\sim 200$ to $400$ km/s.",
         "Velocity dispersions span approximately 200 to 400 kilometers per "
         "second.",
+    ),
+    (
+        "The Star Formation Rate (SFR) is high. The SFRs exceed 10 Msun/yr.",
+        "The Star Formation Rate is high. The star formation rates exceed "
+        "10 solar masses per year.",
+    ),
+    (
+        "JWST and ALMA observations of the GOODS field.",
+        "J W S T and ALMA observations of the goods field.",
     ),
 ]
 

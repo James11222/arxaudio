@@ -213,7 +213,7 @@ they match whether or not the LaTeX command survived earlier passes.
 | `\int` | the integral of |
 | `\oint` | the contour integral of |
 | `\lim` | the limit of |
-| `\%` | percent |
+| `\%` | ` percent` |
 | `\deg` | degrees |
 | `\circ` | degrees |
 | `\prime` | prime |
@@ -262,6 +262,15 @@ they match whether or not the LaTeX command survived earlier passes.
 | `Ly-alpha` | Lyman alpha |
 | `Ly alpha` | Lyman alpha |
 | `Lyα` | Lyman alpha |
+| `Ly-beta` | Lyman beta |
+| `Ly beta` | Lyman beta |
+| `Lyβ` | Lyman beta |
+| `chi squared` | kai squared |
+| `kai to the power of 2` | kai squared |
+| `deltakai to the power of 2` | delta kai squared |
+| `muG` | microgauss |
+| `muT` | microtesla |
+| `muJy` | microjanskys |
 
 ---
 
@@ -329,8 +338,10 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\bLambda\s*CDM\b` | Lambda C D M | `LambdaCDM` -> Lambda C D M |
 | `\blambda\s*CDM\b` | Lambda C D M | `lambdaCDM` -> Lambda C D M |
 | `\b[Pp]hi\s*CDM\b` | phi C D M | `phiCDM` -> phi C D M |
-| `f_\{?\\?sigma_?\{?8\}?\}?` | f sigma eight | `f\sigma_8` or `fsigma_8` -> f sigma eight |
+| `f\\?_?\{?\\?sigma_?\{?8\}?\}?` | f sigma eight | `f\sigma_8` or `fsigma_8` -> f sigma eight |
 | `\\?[Dd]elta\\?chi\^\{?2\}?` | delta kai squared | `\Delta\chi^2` -> delta kai squared |
+| `Δχ\^2` | delta kai squared | Unicode `Δχ^2` -> delta kai squared |
+| `χ\^2` | kai squared | Unicode `χ^2` -> kai squared |
 | `\\chi\^2` | kai squared | `\chi^2` -> kai squared |
 | `\\chi\^\{2\}` | kai squared | `\chi^{2}` -> kai squared |
 | `\bchi[\s-]*squared\b` | kai squared | `chi squared` -> kai squared (TTS fix) |
@@ -342,13 +353,14 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `H_\{0\}` | H naught | `H_{0}` -> H naught |
 | `M_\{?\\?star\}?` | stellar mass | `M_\star` or `M_star` -> stellar mass |
 | `M_\{?\*\}?` | stellar mass | `M_*` -> stellar mass |
-| `M_\{?BH\}?` | black hole mass | `M_BH` or `M_{BH}` -> black hole mass |
+| `M_\{?\s*BH\s*\}?` | black hole mass | `M_BH` or `M_{BH}` -> black hole mass |
 | `f_\{?esc\}?` | escape fraction | `f_esc` or `f_{esc}` -> escape fraction |
 | `L_\{?bol\}?` | bolometric luminosity | `L_bol` or `L_{bol}` -> bolometric luminosity |
 | `M_\{\\odot\}` | solar masses | `M_{\odot}` -> solar masses |
 | `M_\{\\sun\}` | solar masses | `M_{\sun}` -> solar masses |
 | `L_\{\\odot\}` | solar luminosities | `L_{\odot}` -> solar luminosities |
 | `R_\{\\odot\}` | solar radii | `R_{\odot}` -> solar radii |
+| `f_\{?NL\}?\^\{?loc(?:al)?\}?` | f N L local | `f_{NL}^{loc}` -> f N L local |
 | `f_\{?NL\}?` | f N L | `f_NL` or `f_{NL}` -> f N L |
 
 ### Fractions, ratios, and roots
@@ -465,8 +477,8 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
-| `(\d+(?:\.\d+)?)\s*_\{?\s*(-\d+(?:\.\d+)?)\s*\}?\s*\^\{?\s*(\+\d+(?:\.\d+)?)\s*\}?` | \1 plus \3 minus \2 | `67.55_{-0.46}^{+0.53}` -> 67.55 plus +0.53 minus -0.46 |
-| `(\d+(?:\.\d+)?)\s*\^\{?\s*(\+\d+(?:\.\d+)?)\s*\}?\s*_\{?\s*(-\d+(?:\.\d+)?)\s*\}?` | \1 plus \2 minus \3 | `0.80^{+0.01}_{-0.01}` -> 0.80 plus +0.01 minus -0.01 |
+| `(\d+(?:\.\d+)?)\s*_\{?\s*-(\d+(?:\.\d+)?)\s*\}?\s*\^\{?\s*\+(\d+(?:\.\d+)?)\s*\}?` | \1 plus \3 minus \2 | `67.55_{-0.46}^{+0.53}` -> 67.55 plus 0.53 minus 0.46 |
+| `(\d+(?:\.\d+)?)\s*\^\{?\s*\+(\d+(?:\.\d+)?)\s*\}?\s*_\{?\s*-(\d+(?:\.\d+)?)\s*\}?` | \1 plus \2 minus \3 | `0.80^{+0.01}_{-0.01}` -> 0.80 plus 0.01 minus 0.01 |
 
 ### Dashes and ranges (em-dash, en-dash, hyphen-as-range)
 
