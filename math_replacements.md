@@ -435,7 +435,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
-| `\bkm\s+s\s*(?:to the\s*)?-1\s+(?:megaparsecs\|Mpc)\s*(?:to the\s*)?-1` | kilometers per second per megaparsec | `km s to the -1 Mpc to the -1` -> fix |
+| `\bkm\s+s\s*(?:to the\s*)?-1\s+(?:megaparsecs\|Mpc)\s*(?:to the\s*)?-1` | kilometers per second per megaparsec | `km s to the -1 Mpc to the -1` -> kilometers per second per megaparsec |
 | `\bkm\s+s\^\{?-1\}?\s*Mpc\^\{?-1\}?` | kilometers per second per megaparsec | `km s^{-1} Mpc^{-1}` -> kilometers per second per megaparsec |
 | `\brad\s+m\^\{?-2\}?` | radians per square meter | `rad m^{-2}` -> radians per square meter |
 | `\brad\s+m\s*(?:to the\s*)?-2` | radians per square meter | `rad m to the -2` -> radians per square meter |
@@ -541,7 +541,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | `([A-Za-z])_([A-Za-z0-9])` | \1 sub \2 | `x_i` -> x sub i |
 | `\)_\{([^{}]+)\}` | ) sub \1 | `)_{C}` -> ) sub C |
 | `\)_([A-Za-z0-9])` | ) sub \1 | `)_C` -> ) sub C |
-| `_\{([^{}]+)\}` |  sub \1 | `_{i,j}` -> sub i,j (no leading letter; leading space prevents glue) |
+| `_\{([^{}]+)\}` | sub \1 | `_{i,j}` -> sub i,j (fallback for non-ASCII leading char; glue fixed by literal table) |
 
 ### Symbol cleanup
 
