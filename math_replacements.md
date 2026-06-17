@@ -266,9 +266,32 @@ they match whether or not the LaTeX command survived earlier passes.
 | `Ly beta` | Lyman beta |
 | `Lyβ` | Lyman beta |
 | `chi squared` | kai squared |
+| `kai to the power of 2` | kai squared |
+| `deltakai to the power of 2` | delta kai squared |
 | `muG` | microgauss |
 | `muT` | microtesla |
 | `muJy` | microjanskys |
+| `fsigma_8` | f sigma eight |
+| `deltaomega_m` | delta omega sub m |
+| `deltaomega sub m` | delta omega sub m |
+| `alphasub` | alpha sub |
+| `deltasub` | delta sub |
+| `tausub` | tau sub |
+| `sigmasub` | sigma sub |
+| `omegasub` | omega sub |
+| `betasub` | beta sub |
+| `zetasub` | zeta sub |
+| `etasub` | eta sub |
+| `gammasub` | gamma sub |
+| `lambdasub` | lambda sub |
+| `musub` | mu sub |
+| `nusub` | nu sub |
+| `xisub` | xi sub |
+| `rhosub` | rho sub |
+| `thetasub` | theta sub |
+| `phisub` | phi sub |
+| `chisub` | chi sub |
+| `psisub` | psi sub |
 
 ---
 
@@ -295,6 +318,8 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\\mathbf\{([^{}]*)\}` | \1 | `\mathbf{x}` -> x |
 | `\\mathcal\{([^{}]*)\}` | \1 | `\mathcal{L}` -> L |
 | `\\rm\s+` | ` ` | `\rm Mpc` -> ` Mpc` (keep the space, don't glue) |
+| `\\_` | ` ` | `\_` (escaped underscore) -> space |
+| `~` | ` ` | `~` (non-breaking space) -> space |
 | `\\star\b` | star | `M_\star` -> M sub star (stellar) |
 | `\\[,;:!]` | ` ` | `\,` (thin space) -> space |
 | `\\\s` | ` ` | `\ ` (forced space) -> space |
@@ -337,12 +362,17 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\blambda\s*CDM\b` | Lambda C D M | `lambdaCDM` -> Lambda C D M |
 | `\b[Pp]hi\s*CDM\b` | phi C D M | `phiCDM` -> phi C D M |
 | `f\\?_?\{?\\?sigma_?\{?8\}?\}?` | f sigma eight | `f\sigma_8` or `fsigma_8` -> f sigma eight |
+| `fσ_?\{?8\}?` | f sigma eight | Unicode `fσ_8` -> f sigma eight |
 | `\\?[Dd]elta\\?chi\^\{?2\}?` | delta kai squared | `\Delta\chi^2` -> delta kai squared |
 | `Δχ\^2` | delta kai squared | Unicode `Δχ^2` -> delta kai squared |
 | `χ\^2` | kai squared | Unicode `χ^2` -> kai squared |
 | `\\chi\^2` | kai squared | `\chi^2` -> kai squared |
 | `\\chi\^\{2\}` | kai squared | `\chi^{2}` -> kai squared |
 | `\bchi[\s-]*squared\b` | kai squared | `chi squared` -> kai squared (TTS fix) |
+| `\\Delta\s*\\Omega_?\{?m\}?` | delta omega sub m | `\Delta\Omega_m` -> delta omega sub m |
+| `ΔΩ_?\{?m\}?` | delta omega sub m | Unicode `ΔΩ_m` -> delta omega sub m |
+| `\\cos\s*θ` | the cosine of theta | `\cosθ` -> the cosine of theta |
+| `\\cos\s*\\theta` | the cosine of theta | `\cos\theta` -> the cosine of theta |
 | `\\sigma_8\b` | sigma eight | `\sigma_8` -> sigma eight |
 | `\\sigma_\{8\}` | sigma eight | `\sigma_{8}` -> sigma eight |
 | `\bsigma_8\b` | sigma eight | bare `sigma_8` -> sigma eight |
@@ -511,7 +541,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | `([A-Za-z])_([A-Za-z0-9])` | \1 sub \2 | `x_i` -> x sub i |
 | `\)_\{([^{}]+)\}` | ) sub \1 | `)_{C}` -> ) sub C |
 | `\)_([A-Za-z0-9])` | ) sub \1 | `)_C` -> ) sub C |
-| `_\{([^{}]+)\}` | sub \1 | `_{i,j}` -> sub i,j (no leading letter) |
+| `_\{([^{}]+)\}` |  sub \1 | `_{i,j}` -> sub i,j (no leading letter; leading space prevents glue) |
 
 ### Symbol cleanup
 
@@ -519,6 +549,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 |-------|-------------|---------|
 | `(\d)\s*%` | \1 percent | `5%` -> 5 percent |
 | `(\d)percent` | \1 percent | `80percent` -> 80 percent (glued) |
+| `(alpha\|beta\|gamma\|delta\|epsilon\|zeta\|eta\|theta\|kappa\|lambda\|mu\|nu\|xi\|pi\|rho\|sigma\|tau\|phi\|chi\|psi\|omega)sub\b` | \1 sub | `alphasub CO` -> alpha sub CO (space recovery after Unicode Greek subscript) |
 | `([A-Za-z0-9])\s*/\s*([A-Za-z])` | \1 per \2 | `solar masses/h` -> solar masses per h |
 | `([A-Za-z0-9])\s*<\s*([A-Za-z0-9])` | \1 less than \2 | `chi squared < 1` -> chi squared less than 1 |
 | `([A-Za-z0-9])\s*>\s*([A-Za-z0-9])` | \1 greater than \2 | `z > 2` -> z greater than 2 |
