@@ -51,7 +51,7 @@ def test_greek_Lambda_upper():
 
 
 def test_greek_chi():
-    assert ar(r"\chi") == "chi"
+    assert ar(r"\chi") == "kai"
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ def test_h_naught_braced():
 
 def test_chi_squared_command():
     result = ar(r"\chi^2")
-    assert "chi squared" in result
+    assert "kai squared" in result
 
 
 def test_lambda_cdm_backslash():
@@ -499,9 +499,9 @@ def test_escaped_pipe_in_regex_cell_parsed():
 
 
 def test_stellar_subscript_star_spoken():
-    """`M_\\star` (and the braced form) reads 'M sub star', not a dropped token."""
-    assert "sub star" in ar(r"$M_\star > 10$")
-    assert "sub star" in ar(r"$M_{\star} > 10$")
+    """`M_\\star` (and the braced form) reads 'stellar mass'."""
+    assert "stellar mass" in ar(r"$M_\star > 10$")
+    assert "stellar mass" in ar(r"$M_{\star} > 10$")
 
 
 # ---------------------------------------------------------------------------
