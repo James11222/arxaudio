@@ -96,8 +96,8 @@ they match whether or not the LaTeX command survived earlier passes.
 | `\upsilon` | upsilon |
 | `\phi` | phi |
 | `\varphi` | phi |
-| `\chi` | chi |
-| `\psi` | psi |
+| `\chi` | kai |
+| `\psi` | sai |
 | `\omega` | omega |
 
 ### Greek letters (uppercase)
@@ -140,8 +140,8 @@ they match whether or not the LaTeX command survived earlier passes.
 | `τ` | tau |
 | `υ` | upsilon |
 | `φ` | phi |
-| `χ` | chi |
-| `ψ` | psi |
+| `χ` | kai |
+| `ψ` | sai |
 | `ω` | omega |
 | `Γ` | capital gamma |
 | `Δ` | delta |
@@ -229,8 +229,10 @@ they match whether or not the LaTeX command survived earlier passes.
 | `\LambdaCDM` | Lambda C D M |
 | `LambdaCDM` | Lambda C D M |
 | `Lambda CDM` | Lambda C D M |
+| `lambdaCDM` | Lambda C D M |
 | `LCDM` | Lambda C D M |
-| `\chi^2` | chi squared |
+| `phiCDM` | phi C D M |
+| `\chi^2` | kai squared |
 | `\sigma_8` | sigma eight |
 | `M_\odot` | solar masses |
 | `M_{\odot}` | solar masses |
@@ -238,6 +240,14 @@ they match whether or not the LaTeX command survived earlier passes.
 | `M_{sun}` | solar masses |
 | `Msun` | solar masses |
 | `M_sun` | solar masses |
+| `M_star` | stellar mass |
+| `M_*` | stellar mass |
+| `M_BH` | black hole mass |
+| `M_{BH}` | black hole mass |
+| `f_esc` | escape fraction |
+| `f_{esc}` | escape fraction |
+| `L_bol` | bolometric luminosity |
+| `L_{bol}` | bolometric luminosity |
 | `L_\odot` | solar luminosities |
 | `L_{\odot}` | solar luminosities |
 | `Lsun` | solar luminosities |
@@ -249,6 +259,9 @@ they match whether or not the LaTeX command survived earlier passes.
 | `\msun` | solar masses |
 | `\lsun` | solar luminosities |
 | `\kms` | kilometers per second |
+| `Ly-alpha` | Lyman alpha |
+| `Ly alpha` | Lyman alpha |
+| `Lyα` | Lyman alpha |
 
 ---
 
@@ -261,6 +274,10 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
+| `\\hat\{([^{}]*)\}` | \1 hat | `\hat{x}` -> x hat |
+| `\\tilde\{([^{}]*)\}` | \1 tilde | `\tilde{x}` -> x tilde |
+| `\\bar\{([^{}]*)\}` | \1 bar | `\bar{x}` -> x bar |
+| `\\vec\{([^{}]*)\}` | \1 vector | `\vec{x}` -> x vector |
 | `\\texttt\{([^{}]*)\}` | \1 | `\texttt{TUNER}` -> TUNER |
 | `\\textsc\{([^{}]*)\}` | \1 | `\textsc{i}` -> i |
 | `\\textrm\{([^{}]*)\}` | \1 | `\textrm{abc}` -> abc |
@@ -277,30 +294,71 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\$([^$]*)\$` | \1 | `$x$` -> x (strip math delimiters early) |
 | `\$` |  | leftover `$` -> removed |
 
+### Lyman-alpha and hydrogen species (must precede generic subscript rules)
+
+| Regex | Replacement | Example |
+|-------|-------------|---------|
+| `Ly[\s-]*\\?alpha\b` | Lyman alpha | `Ly-alpha` -> Lyman alpha |
+| `Ly[\s-]*α` | Lyman alpha | `Lyα` -> Lyman alpha |
+| `\bHII\b` | H two | `HII region` -> H two region |
+| `\bHI\b` | H one | `HI profile` -> H one profile |
+| `H_\{?2\}?(?!\s*O)` | molecular hydrogen | `H_2 cloud` -> molecular hydrogen cloud |
+
+### Chemical abundance ratios (bracket notation)
+
+| Regex | Replacement | Example |
+|-------|-------------|---------|
+| `\[Fe/H\]` | the iron-to-hydrogen ratio | `[Fe/H]` -> the iron-to-hydrogen ratio |
+| `\[Mg/Fe\]` | the magnesium-to-iron ratio | `[Mg/Fe]` -> the magnesium-to-iron ratio |
+| `\[Si/Fe\]` | the silicon-to-iron ratio | `[Si/Fe]` -> the silicon-to-iron ratio |
+| `\[Si/Mg\]` | the silicon-to-magnesium ratio | `[Si/Mg]` -> the silicon-to-magnesium ratio |
+| `\[O/Fe\]` | the oxygen-to-iron ratio | `[O/Fe]` -> the oxygen-to-iron ratio |
+| `\[C/Fe\]` | the carbon-to-iron ratio | `[C/Fe]` -> the carbon-to-iron ratio |
+| `\[N/Fe\]` | the nitrogen-to-iron ratio | `[N/Fe]` -> the nitrogen-to-iron ratio |
+| `\[Ca/Fe\]` | the calcium-to-iron ratio | `[Ca/Fe]` -> the calcium-to-iron ratio |
+| `\[Ti/Fe\]` | the titanium-to-iron ratio | `[Ti/Fe]` -> the titanium-to-iron ratio |
+| `\[alpha/Fe\]` | the alpha-to-iron ratio | `[alpha/Fe]` -> the alpha-to-iron ratio |
+| `\[α/Fe\]` | the alpha-to-iron ratio | `[α/Fe]` -> the alpha-to-iron ratio |
+| `\[([A-Z][a-z]?)/([A-Z][a-z]?)\]` | the \1-to-\2 ratio | `[X/Y]` -> the X-to-Y ratio |
+
 ### Named astrophysics constants (must precede generic exponent/subscript rules)
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
 | `\\Lambda\s*\\?CDM` | Lambda C D M | `\Lambda CDM` -> Lambda C D M |
 | `\bLambda\s*CDM\b` | Lambda C D M | `LambdaCDM` -> Lambda C D M |
-| `\\chi\^2` | chi squared | `\chi^2` -> chi squared |
-| `\\chi\^\{2\}` | chi squared | `\chi^{2}` -> chi squared |
+| `\blambda\s*CDM\b` | Lambda C D M | `lambdaCDM` -> Lambda C D M |
+| `\b[Pp]hi\s*CDM\b` | phi C D M | `phiCDM` -> phi C D M |
+| `f_\{?\\?sigma_?\{?8\}?\}?` | f sigma eight | `f\sigma_8` or `fsigma_8` -> f sigma eight |
+| `\\?[Dd]elta\\?chi\^\{?2\}?` | delta kai squared | `\Delta\chi^2` -> delta kai squared |
+| `\\chi\^2` | kai squared | `\chi^2` -> kai squared |
+| `\\chi\^\{2\}` | kai squared | `\chi^{2}` -> kai squared |
+| `\bchi[\s-]*squared\b` | kai squared | `chi squared` -> kai squared (TTS fix) |
 | `\\sigma_8\b` | sigma eight | `\sigma_8` -> sigma eight |
 | `\\sigma_\{8\}` | sigma eight | `\sigma_{8}` -> sigma eight |
+| `\bsigma_8\b` | sigma eight | bare `sigma_8` -> sigma eight |
+| `\bomega_m\b` | omega sub m | bare `omega_m` -> omega sub m |
 | `H_0\b` | H naught | `H_0` -> H naught |
 | `H_\{0\}` | H naught | `H_{0}` -> H naught |
+| `M_\{?\\?star\}?` | stellar mass | `M_\star` or `M_star` -> stellar mass |
+| `M_\{?\*\}?` | stellar mass | `M_*` -> stellar mass |
+| `M_\{?BH\}?` | black hole mass | `M_BH` or `M_{BH}` -> black hole mass |
+| `f_\{?esc\}?` | escape fraction | `f_esc` or `f_{esc}` -> escape fraction |
+| `L_\{?bol\}?` | bolometric luminosity | `L_bol` or `L_{bol}` -> bolometric luminosity |
 | `M_\{\\odot\}` | solar masses | `M_{\odot}` -> solar masses |
 | `M_\{\\sun\}` | solar masses | `M_{\sun}` -> solar masses |
 | `L_\{\\odot\}` | solar luminosities | `L_{\odot}` -> solar luminosities |
 | `R_\{\\odot\}` | solar radii | `R_{\odot}` -> solar radii |
+| `f_\{?NL\}?` | f N L | `f_NL` or `f_{NL}` -> f N L |
 
-### Fractions and roots
+### Fractions, ratios, and roots
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
 | `\\frac\{([^{}]+)\}\{([^{}]+)\}` | \1 over \2 | `\frac{a}{b}` -> a over b |
 | `\\sqrt\[([^\]]+)\]\{([^{}]+)\}` | the \1 root of \2 | `\sqrt[3]{x}` -> the 3 root of x |
 | `\\sqrt\{([^{}]+)\}` | the square root of \1 | `\sqrt{x}` -> the square root of x |
+| `(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)` | \1 over \2 | `6.2 / 7.7` -> 6.2 over 7.7 |
 | `1\s*/\s*([A-Za-z])\b` | one over \1 | `1/x` -> one over x |
 
 ### Functions
@@ -337,8 +395,15 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
+| `\bkm\s+s\s*(?:to the\s*)?-1\s+(?:megaparsecs\|Mpc)\s*(?:to the\s*)?-1` | kilometers per second per megaparsec | `km s to the -1 Mpc to the -1` -> fix |
+| `\bkm\s+s\^\{?-1\}?\s*Mpc\^\{?-1\}?` | kilometers per second per megaparsec | `km s^{-1} Mpc^{-1}` -> kilometers per second per megaparsec |
+| `\brad\s+m\^\{?-2\}?` | radians per square meter | `rad m^{-2}` -> radians per square meter |
+| `\brad\s+m\s*(?:to the\s*)?-2` | radians per square meter | `rad m to the -2` -> radians per square meter |
+| `\bs\^\{?-1\}?\s*Mpc\^\{?-1\}?` | per second per megaparsec | `s^{-1} Mpc^{-1}` -> per second per megaparsec |
+| `\bs\^\{?-1\}?` | per second | `s^{-1}` -> per second |
 | `\bMpc\^?\{?3\}?\b` | megaparsecs cubed | `Mpc^3` -> megaparsecs cubed |
 | `\bMpc\^?\{?2\}?\b` | megaparsecs squared | `Mpc^2` -> megaparsecs squared |
+| `\bMpc\^\{?-1\}?` | per megaparsec | `Mpc^{-1}` -> per megaparsec |
 | `\bkpc\^?\{?3\}?\b` | kiloparsecs cubed | `kpc^3` -> kiloparsecs cubed |
 | `\bkpc\^?\{?2\}?\b` | kiloparsecs squared | `kpc^2` -> kiloparsecs squared |
 | `\bpc\^?\{?3\}?\b` | parsecs cubed | `pc^3` -> parsecs cubed |
@@ -396,6 +461,28 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | `(\d+(?:\.\d+)?)\s*[xX]\s*10\^\{?(-?\d+)\}?` | \1 times ten to the \2 | `3.3x10^5` -> 3.3 times ten to the 5 |
 | `\b10\^\{?(-?\d+)\}?` | ten to the \1 | `10^4` -> ten to the 4 |
 
+### Asymmetric error bars and ranges (before generic subscript/superscript)
+
+| Regex | Replacement | Example |
+|-------|-------------|---------|
+| `(\d+(?:\.\d+)?)\s*_\{?\s*(-\d+(?:\.\d+)?)\s*\}?\s*\^\{?\s*(\+\d+(?:\.\d+)?)\s*\}?` | \1 plus \3 minus \2 | `67.55_{-0.46}^{+0.53}` -> 67.55 plus +0.53 minus -0.46 |
+| `(\d+(?:\.\d+)?)\s*\^\{?\s*(\+\d+(?:\.\d+)?)\s*\}?\s*_\{?\s*(-\d+(?:\.\d+)?)\s*\}?` | \1 plus \2 minus \3 | `0.80^{+0.01}_{-0.01}` -> 0.80 plus +0.01 minus -0.01 |
+
+### Dashes and ranges (em-dash, en-dash, hyphen-as-range)
+
+| Regex | Replacement | Example |
+|-------|-------------|---------|
+| `(\d+(?:\.\d+)?)\s*--\s*(\d+(?:\.\d+)?)` | \1 to \2 | `10--20` -> 10 to 20 |
+| `—` | to | em-dash → "to" |
+| `–` | to | en-dash → "to" |
+
+### Significance (number-sigma patterns)
+
+| Regex | Replacement | Example |
+|-------|-------------|---------|
+| `(\d+(?:\.\d+)?)\s*\\?sigma\b` | \1 sigma | `3.5\sigma` -> 3.5 sigma |
+| `(\d+(?:\.\d+)?)sigma\b` | \1 sigma | `3.5sigma` -> 3.5 sigma |
+
 ### Generic subscripts and superscripts (most-nested first)
 
 | Regex | Replacement | Example |
@@ -421,6 +508,8 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | Regex | Replacement | Example |
 |-------|-------------|---------|
 | `(\d)\s*%` | \1 percent | `5%` -> 5 percent |
+| `(\d)percent` | \1 percent | `80percent` -> 80 percent (glued) |
+| `([A-Za-z0-9])\s*/\s*([A-Za-z])` | \1 per \2 | `solar masses/h` -> solar masses per h |
 | `([A-Za-z0-9])\s*<\s*([A-Za-z0-9])` | \1 less than \2 | `chi squared < 1` -> chi squared less than 1 |
 | `([A-Za-z0-9])\s*>\s*([A-Za-z0-9])` | \1 greater than \2 | `z > 2` -> z greater than 2 |
 | `([A-Za-z0-9])\s*=\s*([A-Za-z0-9])` | \1 equals \2 | `n = 3` -> n equals 3 |

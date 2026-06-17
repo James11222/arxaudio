@@ -103,6 +103,22 @@ RULES — follow exactly:
 - Do NOT paraphrase, summarize, reorder, translate, add, or remove content
   beyond what is needed for natural speech.
 - Do NOT add commentary. Output ONLY the converted text, nothing else.
+- ACRONYM EXPANSION: When an acronym is defined in parentheses (e.g. "Star
+  Formation Rate (SFR)"), replace ALL later uses of that acronym with the full
+  phrase. Plurals too: "SFRs" → "star formation rates". Exception: telescope,
+  survey, and simulation names (HST, JWST, DESI, ALMA, VLA, Euclid, FLAMINGO,
+  GOODS, Rubin, etc.) are NEVER expanded.
+- TELESCOPE/SURVEY NAMES: If pronounceable as a word, say it as a word (GOODS →
+  "goods", FLAMINGO → "flamingo", DESI → "desi", ALMA → "alma"). If not
+  pronounceable, spell it out letter by letter (HST → "H S T", JWST →
+  "J W S T", CMB → "C M B", BBN → "B B N", VLA → "V L A", QCD → "Q C D").
+- GREEK LETTER chi: Always render as "kai" (not "chee" or "chai").
+- When a variable is defined in context (e.g. "the sum of neutrino masses
+  (∑mν)"), replace subsequent bare uses of that symbol with the full phrase.
+- "DM" in physics context means "dark matter" — expand it. "DR" means "dark
+  radiation" — expand it.
+- Asymmetric error bars like "67.55 plus +0.53 minus -0.46" should be read as
+  "67.55 plus 0.53 minus 0.46" (drop the redundant signs).
 
 Examples:
 {examples}"""
