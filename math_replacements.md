@@ -97,7 +97,7 @@ they match whether or not the LaTeX command survived earlier passes.
 | `\phi` | phi |
 | `\varphi` | phi |
 | `\chi` | kai |
-| `\psi` | sai |
+| `\psi` | psi |
 | `\omega` | omega |
 
 ### Greek letters (uppercase)
@@ -141,7 +141,7 @@ they match whether or not the LaTeX command survived earlier passes.
 | `υ` | upsilon |
 | `φ` | phi |
 | `χ` | kai |
-| `ψ` | sai |
+| `ψ` | psi |
 | `ω` | omega |
 | `Γ` | capital gamma |
 | `Δ` | delta |
@@ -266,8 +266,6 @@ they match whether or not the LaTeX command survived earlier passes.
 | `Ly beta` | Lyman beta |
 | `Lyβ` | Lyman beta |
 | `chi squared` | kai squared |
-| `kai to the power of 2` | kai squared |
-| `deltakai to the power of 2` | delta kai squared |
 | `muG` | microgauss |
 | `muT` | microtesla |
 | `muJy` | microjanskys |
