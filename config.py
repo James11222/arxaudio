@@ -174,7 +174,7 @@ PAUSE_SECONDS: float = 1.2
 #     there is no email-only listing section.
 # Useful if you subscribe to very active categories and want a shorter digest.
 
-MAX_PAPERS: int = 10
+MAX_PAPERS: int = 20
 
 
 # ---------------------------------------------------------------------------
