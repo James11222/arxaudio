@@ -4,6 +4,7 @@ Runnable as a module::
 
     python -m arxaudio.pipeline                  # full daily run
     python -m arxaudio.pipeline --dry-run        # fetch+rank+process, no TTS/email
+    python -m arxaudio.pipeline --output-text    # also save processed text transcript
     python -m arxaudio.pipeline --no-email        # build the MP3 but don't send it
 
 Flow (see idea.md / PLAN.md):
@@ -135,6 +136,10 @@ def _default_output() -> Path:
     return Path("output") / f"arxaudio_{date.today().isoformat()}.mp3"
 
 
+def _default_text_output() -> Path:
+    return Path("output") / f"arxaudio_{date.today().isoformat()}.txt"
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="arxaudio",
@@ -200,6 +205,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=(
             "Fetch + rank + process only; print what would be synthesized and "
             "the email-only extras, then exit. No TTS, no email."
+        ),
+    )
+    p.add_argument(
+        "--output-text",
+        metavar="PATH",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "Save the processed text transcript to a file. "
+            "Defaults to ./output/arxaudio_YYYY-MM-DD.txt when no path is given."
         ),
     )
     return p
@@ -293,6 +309,9 @@ def run(args: argparse.Namespace) -> int:
     preferences = _read_preferences(preferences_path)
 
     output_path = Path(args.output) if args.output else _default_output()
+    text_path: Path | None = None
+    if args.output_text is not None:
+        text_path = Path(args.output_text) if args.output_text else _default_text_output()
 
     benty_mode = settings.paper_source == "benty"
     notebooklm_mode = settings.tts_backend == "notebooklm"
@@ -394,6 +413,30 @@ def run(args: argparse.Namespace) -> int:
     else:
         assert llm is not None
         process.process_papers(kept, llm)
+
+    # --- Text transcript ------------------------------------------------
+    if text_path is not None:
+        text_path.parent.mkdir(parents=True, exist_ok=True)
+        with text_path.open("w", encoding="utf-8") as f:
+            f.write(f"arxaudio digest — {date.today().isoformat()}\n")
+            f.write(f"{len(kept)} audio papers, {len(extras)} email-only\n\n")
+            for i, paper in enumerate(kept, start=1):
+                byline = paper.first_author + (
+                    " et al" if len(paper.authors) > 1 else ""
+                )
+                abstract = paper.clean_abstract or paper.abstract
+                f.write(f"[{i}/{len(kept)}] {paper.arxiv_id}\n")
+                f.write(f"TITLE:    {paper.clean_title or paper.title}\n")
+                f.write(f"AUTHOR:   {byline}\n")
+                f.write(f"ABSTRACT: {abstract}\n\n")
+            if extras:
+                f.write(f"Email-only ({len(extras)} papers):\n")
+                for i, paper in enumerate(extras, start=1):
+                    byline = paper.first_author + (
+                        " et al" if len(paper.authors) > 1 else ""
+                    )
+                    f.write(f"  {i}. {paper.title} — {byline} — {paper.url}\n")
+        logger.info("Text transcript saved to %s", text_path)
 
     # --- Dry run stops here ---------------------------------------------
     if args.dry_run:

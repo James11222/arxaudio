@@ -43,7 +43,7 @@
 #                               password not reused elsewhere)
 #            Optionally set BENTY_BASE_URL to override the default base URL.
 
-PAPER_SOURCE: str = "benty"  # "arxiv" or "benty"
+PAPER_SOURCE: str = "arxiv"  # "arxiv" or "benty"
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +72,7 @@ LLM_BACKEND: str = "ollama"
 # qwen2.5:0.5b is tiny (~400 MB) and fast enough for title ranking decisions.
 # Larger options:  "qwen2.5:1.5b", "qwen2.5:3b", "llama3.2:1b"
 
-OLLAMA_MODEL: str = "qwen2.5:1.5b"
+OLLAMA_MODEL: str = "qwen2.5:0.5b"
 
 
 # ---------------------------------------------------------------------------

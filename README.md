@@ -12,7 +12,7 @@ You'll fork the repo, pick where your papers come from, add email secrets, and t
 
 ### 1. Fork this repository
 
-Click **Fork** on GitHub. Every step below happens on *your* fork.
+Click **Fork** on GitHub. Every step below happens on _your_ fork.
 
 ### 2. Choose your paper source
 
@@ -25,6 +25,7 @@ arxaudio can get your daily papers in one of two ways. Pick **one** and edit `PA
 Pulls the day's new papers from arXiv's RSS feeds and ranks them with a tiny local AI model against interests you describe in plain English.
 
 **In `config.py`:**
+
 ```python
 PAPER_SOURCE = "arxiv"
 ```
@@ -32,12 +33,14 @@ PAPER_SOURCE = "arxiv"
 **Then edit two files:**
 
 - **`config.py` → `CATEGORIES`** — the arXiv categories to follow:
+
   ```python
   CATEGORIES = [
       "astro-ph.CO",   # Cosmology
       "cs.LG",         # Machine Learning
   ]
   ```
+
   Full list: <https://arxiv.org/category_taxonomy>
 
 - **`preferences.md`** — describe, in plain English, the topics, methods, and surveys you care about (and a "Not interested in" section). This is fed to the ranking model.
@@ -46,9 +49,10 @@ PAPER_SOURCE = "arxiv"
 
 </td><td valign="top">
 
-If you have a [benty-fields.com](https://www.benty-fields.com) account, let *its* machine-learning model — trained on your own reading and voting history — pick and rank the day's papers for you.
+If you have a [benty-fields.com](https://www.benty-fields.com) account, let _its_ machine-learning model — trained on your own reading and voting history — pick and rank the day's papers for you.
 
 **In `config.py`:**
+
 ```python
 PAPER_SOURCE = "benty"
 ```
@@ -57,9 +61,9 @@ In this mode `CATEGORIES` and `preferences.md` are **ignored** — benty uses yo
 
 **Add two more secrets** (alongside the email secrets in step 3):
 
-| Secret | Value |
-|--------|-------|
-| `BENTY_EMAIL` | Your benty-fields login email |
+| Secret           | Value                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| `BENTY_EMAIL`    | Your benty-fields login email                                                       |
 | `BENTY_PASSWORD` | Your benty-fields password — **use a unique one**, since it's stored as a CI secret |
 
 More detail in the [benty-fields section](#paper-source-details-arxiv-vs-benty-fields).
@@ -71,15 +75,16 @@ More detail in the [benty-fields section](#paper-source-details-arxiv-vs-benty-f
 
 On your fork: **Settings → Secrets and variables → Actions → New repository secret**. Add these five:
 
-| Secret name     | Description                                       |
-|-----------------|---------------------------------------------------|
-| `SMTP_HOST`     | Your SMTP server, e.g. `smtp.gmail.com`           |
-| `SMTP_PORT`     | `587` (STARTTLS) or `465` (SSL)                   |
-| `SMTP_USER`     | Your full email address                           |
-| `SMTP_PASSWORD` | Your SMTP password or app password                |
-| `EMAIL_TO`      | Recipient address (can be the same as `SMTP_USER`)|
+| Secret name     | Description                                        |
+| --------------- | -------------------------------------------------- |
+| `SMTP_HOST`     | Your SMTP server, e.g. `smtp.gmail.com`            |
+| `SMTP_PORT`     | `587` (STARTTLS) or `465` (SSL)                    |
+| `SMTP_USER`     | Your full email address                            |
+| `SMTP_PASSWORD` | Your SMTP password or app password                 |
+| `EMAIL_TO`      | Recipient address (can be the same as `SMTP_USER`) |
 
-**Using Gmail?** You must create an *App Password*, not use your normal password:
+**Using Gmail?** You must create an _App Password_, not use your normal password:
+
 1. Google Account → Security → enable **2-Step Verification**.
 2. Search **App passwords** in your Google Account settings, create one (name it "arxaudio").
 3. Use `smtp.gmail.com` / `587` / your Gmail address / the generated 16-character password.
@@ -99,7 +104,7 @@ REPO_URL = "https://github.com/your-username/arxaudio"
 1. Go to the **Actions** tab on your fork and click **"I understand my workflows, go ahead and enable them."**
 2. Select **"arxaudio daily digest"** → **Run workflow** to trigger the first run manually.
 
-The first run downloads the local AI model (~400 MB) and takes 10–15 minutes; later runs restore it from cache and are much faster. The finished MP3 is emailed to you *and* saved as a workflow artifact (under **Actions → your run → arxaudio-digest**, kept 14 days) so you can grab it even before email is working.
+The first run downloads the local AI model (~400 MB) and takes 10–15 minutes; later runs restore it from cache and are much faster. The finished MP3 is emailed to you _and_ saved as a workflow artifact (under **Actions → your run → arxaudio-digest**, kept 14 days) so you can grab it even before email is working.
 
 That's it — by default it now runs automatically every weekday at 10:37 UTC.
 
@@ -108,7 +113,7 @@ That's it — by default it now runs automatically every weekday at 10:37 UTC.
 Edit the cron line in `.github/workflows/daily.yml`:
 
 ```yaml
-- cron: "37 10 * * 1-5"   # 10:37 UTC, Mon–Fri
+- cron: "37 10 * * 1-5" # 10:37 UTC, Mon–Fri
 ```
 
 arXiv announces new papers Mon–Fri around 00:00 UTC, so any morning-UTC run catches the fresh batch. Build your own time with [crontab.guru](https://crontab.guru/) (all GitHub Actions cron times are UTC).
@@ -169,7 +174,7 @@ What changes in benty mode:
 - **The LLM ranking step is skipped entirely** — benty's ranking is used as-is. (ollama is still used for the Process/LaTeX-cleanup step, unless you also pass `--no-llm-clean`.)
 - **Two new secrets are required** — `BENTY_EMAIL` and `BENTY_PASSWORD` (see the [Quick start](#2-choose-your-paper-source)). Optionally `BENTY_BASE_URL` overrides the site root (defaults to `https://www.benty-fields.com`).
 
-> **A note on scraping:** this logs in to *your own* account and fetches one page per day — benty-fields' `robots.txt` permits it and the load is negligible. Because it scrapes rendered HTML (benty exposes no public API), it is inherently more fragile than the arXiv RSS path: if benty changes their page layout, this source may need updating. The arXiv source remains the robust default.
+> **A note on scraping:** this logs in to _your own_ account and fetches one page per day — benty-fields' `robots.txt` permits it and the load is negligible. Because it scrapes rendered HTML (benty exposes no public API), it is inherently more fragile than the arXiv RSS path: if benty changes their page layout, this source may need updating. The arXiv source remains the robust default.
 
 To run benty mode locally, set the two environment variables before running:
 
@@ -204,6 +209,8 @@ ollama pull qwen2.5:0.5b
 ollama serve
 ```
 
+> **Installing ollama:** Download from [ollama.com](https://ollama.com/) or install via Homebrew with `brew install ollama`. To stop the server when you're done: `pkill ollama`.
+
 ### Set SMTP environment variables (for email delivery)
 
 ```bash
@@ -230,17 +237,18 @@ This fetches papers, skips all LLM calls, and prints what would be synthesized �
 
 ### CLI flags
 
-| Flag                    | Type    | Description                                                                 |
-|-------------------------|---------|-----------------------------------------------------------------------------|
-| `--config PATH`         | string  | Path to a `config.py` (default: repo-root `config.py`)                     |
-| `--preferences PATH`    | string  | Path to a `preferences.md` (default: repo-root `preferences.md`)           |
-| `--output PATH`         | string  | Output MP3 path (default: `./output/arxaudio_YYYY-MM-DD.mp3`)               |
-| `--verbose`             | flag    | Enable DEBUG logging                                                        |
-| `--max-papers N`        | integer | Override `MAX_PAPERS` (0 = unlimited)                                       |
-| `--no-rank`             | flag    | Skip the LLM ranking; use arrival order for all fetched papers              |
-| `--no-llm-clean`        | flag    | Skip the LLM math-cleanup pass; use regex-only replacements                 |
-| `--no-email`            | flag    | Build the audio but do not send the email                                   |
-| `--dry-run`             | flag    | Fetch + filter + process only; print what would be synthesized, then exit   |
+| Flag                 | Type    | Description                                                               |
+| -------------------- | ------- | ------------------------------------------------------------------------- |
+| `--config PATH`      | string  | Path to a `config.py` (default: repo-root `config.py`)                    |
+| `--preferences PATH` | string  | Path to a `preferences.md` (default: repo-root `preferences.md`)          |
+| `--output PATH`      | string  | Output MP3 path (default: `./output/arxaudio_YYYY-MM-DD.mp3`)             |
+| `--verbose`          | flag    | Enable DEBUG logging                                                      |
+| `--max-papers N`     | integer | Override `MAX_PAPERS` (0 = unlimited)                                     |
+| `--no-rank`          | flag    | Skip the LLM ranking; use arrival order for all fetched papers            |
+| `--no-llm-clean`     | flag    | Skip the LLM math-cleanup pass; use regex-only replacements               |
+| `--no-email`         | flag    | Build the audio but do not send the email                                 |
+| `--dry-run`          | flag    | Fetch + filter + process only; print what would be synthesized, then exit |
+| `--output-text PATH` | string  | Save the processed text transcript to a file (default: `./output/arxaudio_YYYY-MM-DD.txt` when no path given) |
 
 ---
 
@@ -250,21 +258,21 @@ All user-facing settings live in `config.py` at the repository root. Do not put 
 
 ### config.py variables
 
-| Variable               | Default                             | Description                                                                                  |
-|------------------------|-------------------------------------|----------------------------------------------------------------------------------------------|
-| `PAPER_SOURCE`         | `"arxiv"`                           | Where papers come from: `"arxiv"` (RSS feeds + LLM ranking) or `"benty"` (benty-fields ML ranking; see the [details section](#paper-source-details-arxiv-vs-benty-fields)). In `"benty"` mode `CATEGORIES` is ignored and `BENTY_EMAIL`/`BENTY_PASSWORD` env vars are required |
-| `BENTY_BASE_URL`       | `"https://www.benty-fields.com"`    | (benty mode only) Override the benty-fields site root. Rarely needed                          |
-| `CATEGORIES`           | `["astro-ph.CO", "astro-ph.GA"]`    | arXiv categories to poll (ignored when `PAPER_SOURCE="benty"`). See https://arxiv.org/category_taxonomy |
-| `LLM_BACKEND`          | `"ollama"`                          | Which LLM backend to use. Currently `"ollama"`; extensible via the registry in `pipeline.py` |
-| `OLLAMA_MODEL`         | `"qwen2.5:0.5b"`                    | ollama model tag. The workflow reads this at runtime — change it here and CI follows automatically |
-| `TTS_BACKEND`          | `"edge"`                            | Which TTS backend to use. Currently `"edge"` (edge-tts); extensible via the registry        |
-| `TTS_VOICE`            | `"en-US-AndrewNeural"`              | Edge TTS voice identifier. Run `edge-tts --list-voices` to browse options                   |
-| `TTS_SPEED`            | `1.0`                               | Narration speed multiplier (`1.0` normal, `0.8` slower, `1.5`/`2.0` faster). Useful range ~0.5–2.0 |
-| `MAX_MB`               | `20`                                | Maximum MP3 size in megabytes. Audio is bitrate-stepped-down automatically if exceeded      |
-| `PAUSE_SECONDS`        | `1.2`                               | Silence gap in seconds between papers                                                        |
-| `MAX_PAPERS`           | `10`                                | Top N ranked papers get full audio; next N are listed in the email only. `0` means unlimited (all papers get audio, no email-only section) |
-| `EMAIL_SUBJECT_PREFIX` | `"ArXaudio Digest"`                 | Prepended to every email subject. The pipeline appends the date and paper count             |
-| `REPO_URL`             | `"https://github.com/James11222/arxaudio"` | Link shown in the email footer. Set this to your own fork                            |
+| Variable               | Default                                    | Description                                                                                                                                                                                                                                                                    |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PAPER_SOURCE`         | `"arxiv"`                                  | Where papers come from: `"arxiv"` (RSS feeds + LLM ranking) or `"benty"` (benty-fields ML ranking; see the [details section](#paper-source-details-arxiv-vs-benty-fields)). In `"benty"` mode `CATEGORIES` is ignored and `BENTY_EMAIL`/`BENTY_PASSWORD` env vars are required |
+| `BENTY_BASE_URL`       | `"https://www.benty-fields.com"`           | (benty mode only) Override the benty-fields site root. Rarely needed                                                                                                                                                                                                           |
+| `CATEGORIES`           | `["astro-ph.CO", "astro-ph.GA"]`           | arXiv categories to poll (ignored when `PAPER_SOURCE="benty"`). See https://arxiv.org/category_taxonomy                                                                                                                                                                        |
+| `LLM_BACKEND`          | `"ollama"`                                 | Which LLM backend to use. Currently `"ollama"`; extensible via the registry in `pipeline.py`                                                                                                                                                                                   |
+| `OLLAMA_MODEL`         | `"qwen2.5:0.5b"`                           | ollama model tag. The workflow reads this at runtime — change it here and CI follows automatically                                                                                                                                                                             |
+| `TTS_BACKEND`          | `"edge"`                                   | Which TTS backend to use. Currently `"edge"` (edge-tts); extensible via the registry                                                                                                                                                                                           |
+| `TTS_VOICE`            | `"en-US-AndrewNeural"`                     | Edge TTS voice identifier. Run `edge-tts --list-voices` to browse options                                                                                                                                                                                                      |
+| `TTS_SPEED`            | `1.0`                                      | Narration speed multiplier (`1.0` normal, `0.8` slower, `1.5`/`2.0` faster). Useful range ~0.5–2.0                                                                                                                                                                             |
+| `MAX_MB`               | `20`                                       | Maximum MP3 size in megabytes. Audio is bitrate-stepped-down automatically if exceeded                                                                                                                                                                                         |
+| `PAUSE_SECONDS`        | `1.2`                                      | Silence gap in seconds between papers                                                                                                                                                                                                                                          |
+| `MAX_PAPERS`           | `10`                                       | Top N ranked papers get full audio; next N are listed in the email only. `0` means unlimited (all papers get audio, no email-only section)                                                                                                                                     |
+| `EMAIL_SUBJECT_PREFIX` | `"ArXaudio Digest"`                        | Prepended to every email subject. The pipeline appends the date and paper count                                                                                                                                                                                                |
+| `REPO_URL`             | `"https://github.com/James11222/arxaudio"` | Link shown in the email footer. Set this to your own fork                                                                                                                                                                                                                      |
 
 ### preferences.md
 
@@ -301,20 +309,20 @@ Both are markdown tables parsed by `process.py`. **Extend the pipeline by editin
 
 ## NotebookLM TTS backend (AI-generated podcast)
 
-> ⚠️ This uses the **unofficial** [notebooklm-py](https://github.com/teng-lin/notebooklm-py) library.  Google can change their internal API without notice.  Best for personal use and research.
+> ⚠️ This uses the **unofficial** [notebooklm-py](https://github.com/teng-lin/notebooklm-py) library. Google can change their internal API without notice. Best for personal use and research.
 
 Instead of the default Microsoft Edge TTS (which reads each abstract aloud one at a time), the **notebookLM backend** sends all selected papers to Google NotebookLM and requests a single AI-generated Audio Overview — a podcast-style conversation that covers each paper's key takeaways for an expert audience.
 
 ### What changes with this backend
 
-| | Edge TTS (default) | NotebookLM |
-|---|---|---|
-| Audio style | Synthetic narration, one abstract per segment | Natural podcast conversation |
-| Processing | Per-paper Edge TTS + ffmpeg concat | Single NotebookLM Audio Overview |
-| LLM cleanup | ollama math-cleanup pass | **None** (notebookLM handles it) |
-| Internet required | Edge TTS endpoint | Google NotebookLM |
-| Benty + notebookLM | ollama still used for math cleanup | **Zero local LLM usage** |
-| Generation time | ~30 s for 10 papers | ~2–5 minutes |
+|                    | Edge TTS (default)                            | NotebookLM                       |
+| ------------------ | --------------------------------------------- | -------------------------------- |
+| Audio style        | Synthetic narration, one abstract per segment | Natural podcast conversation     |
+| Processing         | Per-paper Edge TTS + ffmpeg concat            | Single NotebookLM Audio Overview |
+| LLM cleanup        | ollama math-cleanup pass                      | **None** (notebookLM handles it) |
+| Internet required  | Edge TTS endpoint                             | Google NotebookLM                |
+| Benty + notebookLM | ollama still used for math cleanup            | **Zero local LLM usage**         |
+| Generation time    | ~30 s for 10 papers                           | ~2–5 minutes                     |
 
 When `PAPER_SOURCE="benty"` + `TTS_BACKEND="notebooklm"`, **no local AI model (ollama) is needed at all**.
 
@@ -334,7 +342,7 @@ This installs Playwright and downloads Chromium (~170 MB) on first use.
 notebooklm login
 ```
 
-A browser window opens — sign in with your Google account.  Cookies are saved to `~/.notebooklm/storage_state.json`.
+A browser window opens — sign in with your Google account. Cookies are saved to `~/.notebooklm/storage_state.json`.
 
 Verify the login worked:
 
@@ -356,11 +364,11 @@ Copy the entire JSON output.
 
 On your fork: **Settings → Secrets and variables → Actions → New repository secret**.
 
-| Secret name | Value |
-|---|---|
+| Secret name            | Value                              |
+| ---------------------- | ---------------------------------- |
 | `NOTEBOOKLM_AUTH_JSON` | The full JSON you copied in step 3 |
 
-> **Security note:** This JSON contains your Google session cookies.  Treat it like a password.  Use a dedicated Google account if you prefer.
+> **Security note:** This JSON contains your Google session cookies. Treat it like a password. Use a dedicated Google account if you prefer.
 
 ### Configure config.py
 
@@ -395,46 +403,49 @@ NOTEBOOKLM_TIMEOUT: int = 600
 
 ### Install the optional dependency in CI
 
-Your fork's workflow needs the extra dependency.  If you don't want to edit the workflow file, you can also add it as a pip install step:
+Your fork's workflow needs the extra dependency. If you don't want to edit the workflow file, you can also add it as a pip install step:
 
 In `.github/workflows/daily.yml`, change the pip install step from:
+
 ```yaml
 - run: pip install -e ".[dev]"
 ```
+
 to:
+
 ```yaml
 - run: pip install -e ".[dev,notebooklm]"
 ```
 
 ### Keeping your auth fresh
 
-NotebookLM session cookies typically last several weeks.  When a run fails with an auth error, re-run `notebooklm login` on your local machine and update the `NOTEBOOKLM_AUTH_JSON` secret with the new cookie JSON.
+NotebookLM session cookies typically last several weeks. When a run fails with an auth error, re-run `notebooklm login` on your local machine and update the `NOTEBOOKLM_AUTH_JSON` secret with the new cookie JSON.
 
 ### Limitations
 
 - **Unofficial API** — Google can change internal endpoints without notice.
-- **Generation time** — NotebookLM takes 2–5 minutes to generate audio (vs ~30 s for Edge TTS).  Set `NOTEBOOKLM_TIMEOUT` higher if runs time out.
-- **One audio file** — You get a single podcast per run, not a separate segment per paper.  The `MAX_MB` size budget and ffmpeg re-encoding are **not applied** (notebookLM controls the output format).
-- **Language** — Defaults to English.  If you need another language, use the Edge TTS backend.
+- **Generation time** — NotebookLM takes 2–5 minutes to generate audio (vs ~30 s for Edge TTS). Set `NOTEBOOKLM_TIMEOUT` higher if runs time out.
+- **One audio file** — You get a single podcast per run, not a separate segment per paper. The `MAX_MB` size budget and ffmpeg re-encoding are **not applied** (notebookLM controls the output format).
+- **Language** — Defaults to English. If you need another language, use the Edge TTS backend.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Likely cause and fix |
-|---------|----------------------|
-| No email received | Check your spam folder. Verify the five secrets are set correctly in GitHub. If SMTP is only partially configured (e.g. `SMTP_HOST` set but `SMTP_PASSWORD` missing), the pipeline exits with an error — check the Actions log. |
-| Gmail authentication error | You must use an App Password, not your regular account password. See the Gmail walkthrough in the [Quick start](#3-add-email-secrets). |
-| Zero papers in the output | arXiv announces new papers Monday through Friday only. Weekend and holiday runs see the most recent weekday mailing (or nothing new). Run locally with `--dry-run --verbose` to see what today's feed contains. |
-| No papers in the audio | The ranking LLM uses arrival order as a fallback, so this is unlikely unless `MAX_PAPERS` is set very low or no papers were fetched. Try running locally with `--dry-run --verbose` to see the ranking output. Sharpen your `preferences.md` to improve ranking quality. |
-| `ollama: connection refused` (local) | The ollama server is not running. Start it with `ollama serve` in a separate terminal. |
-| `model not found` / `404` error | The model has not been pulled. Run `ollama pull qwen2.5:0.5b` (or whatever `OLLAMA_MODEL` is set to). |
-| MP3 too large to email | The bitrate step-down is automatic (64k → 48k → 32k → 24k). If it is still over the limit, lower `MAX_PAPERS` in `config.py` to cap the number of papers per run. |
-| First Actions run takes 10–15 minutes | The ollama model is being downloaded and the cache is being populated. Subsequent runs restore from cache and are much faster. |
-| `edge-tts` synthesis failures | edge-tts requires an outbound network connection to Microsoft's servers. Transient failures are retried; persistent failures skip that paper and continue. Check the Actions log for details. |
-| `benty-fields login failed` | (benty mode) Wrong `BENTY_EMAIL`/`BENTY_PASSWORD`, or your account is locked. Verify the credentials by logging in through a browser. |
-| Benty mode fetches no/odd papers | benty scrapes rendered HTML; a site layout change can break parsing. Run locally with `--dry-run --verbose` to inspect. The arXiv source (`PAPER_SOURCE="arxiv"`) is the robust fallback. |
-| Pipeline exits 1 with no clear error | Run locally with `--verbose` for DEBUG-level logging. |
+| Symptom                               | Likely cause and fix                                                                                                                                                                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| No email received                     | Check your spam folder. Verify the five secrets are set correctly in GitHub. If SMTP is only partially configured (e.g. `SMTP_HOST` set but `SMTP_PASSWORD` missing), the pipeline exits with an error — check the Actions log.                                          |
+| Gmail authentication error            | You must use an App Password, not your regular account password. See the Gmail walkthrough in the [Quick start](#3-add-email-secrets).                                                                                                                                   |
+| Zero papers in the output             | arXiv announces new papers Monday through Friday only. Weekend and holiday runs see the most recent weekday mailing (or nothing new). Run locally with `--dry-run --verbose` to see what today's feed contains.                                                          |
+| No papers in the audio                | The ranking LLM uses arrival order as a fallback, so this is unlikely unless `MAX_PAPERS` is set very low or no papers were fetched. Try running locally with `--dry-run --verbose` to see the ranking output. Sharpen your `preferences.md` to improve ranking quality. |
+| `ollama: connection refused` (local)  | The ollama server is not running. Start it with `ollama serve` in a separate terminal.                                                                                                                                                                                   |
+| `model not found` / `404` error       | The model has not been pulled. Run `ollama pull qwen2.5:0.5b` (or whatever `OLLAMA_MODEL` is set to).                                                                                                                                                                    |
+| MP3 too large to email                | The bitrate step-down is automatic (64k → 48k → 32k → 24k). If it is still over the limit, lower `MAX_PAPERS` in `config.py` to cap the number of papers per run.                                                                                                        |
+| First Actions run takes 10–15 minutes | The ollama model is being downloaded and the cache is being populated. Subsequent runs restore from cache and are much faster.                                                                                                                                           |
+| `edge-tts` synthesis failures         | edge-tts requires an outbound network connection to Microsoft's servers. Transient failures are retried; persistent failures skip that paper and continue. Check the Actions log for details.                                                                            |
+| `benty-fields login failed`           | (benty mode) Wrong `BENTY_EMAIL`/`BENTY_PASSWORD`, or your account is locked. Verify the credentials by logging in through a browser.                                                                                                                                    |
+| Benty mode fetches no/odd papers      | benty scrapes rendered HTML; a site layout change can break parsing. Run locally with `--dry-run --verbose` to inspect. The arXiv source (`PAPER_SOURCE="arxiv"`) is the robust fallback.                                                                                |
+| Pipeline exits 1 with no clear error  | Run locally with `--verbose` for DEBUG-level logging.                                                                                                                                                                                                                    |
 
 ---
 

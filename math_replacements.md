@@ -201,6 +201,7 @@ they match whether or not the LaTeX command survived earlier passes.
 | Match | Spoken |
 |-------|--------|
 | `\pm` | ` plus or minus ` |
+| `+/-` | ` plus or minus ` |
 | `\mp` | ` minus or plus ` |
 | `\times` | ` times ` |
 | `\cdot` | ` times ` |
@@ -391,6 +392,28 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `f_\{?NL\}?\^\{?loc(?:al)?\}?` | f N L local | `f_{NL}^{loc}` -> f N L local |
 | `f_\{?NL\}?` | f N L | `f_NL` or `f_{NL}` -> f N L |
 
+### Supernova types (most-specific subtypes first to avoid partial matches)
+
+| Regex | Replacement | Example |
+|-------|-------------|---------|
+| `\bSNe?\s*Ibc\b` | SN one B C | `SNIbc` or `SN Ibc` -> SN one B C |
+| `\bSNe?\s*IIn\b` | SN two N | `SNIIn` or `SN IIn` -> SN two N |
+| `\bSNe?\s*IIP\b` | SN two P | `SNIIP` or `SN IIP` -> SN two P |
+| `\bSNe?\s*IIb\b` | SN two B | `SNIIb` or `SN IIb` -> SN two B |
+| `\bSNe?\s*II\b` | SN two | `SNII` or `SN II` -> SN two |
+| `\bSNe?\s*Ic\b` | SN one C | `SNIc` or `SN Ic` -> SN one C |
+| `\bSNe?\s*Ib\b` | SN one B | `SNIb` or `SN Ib` -> SN one B |
+| `\bSNe?\s*Ia\b` | SN one A | `SNIa` or `SN Ia` -> SN one A |
+| `\bType\s+Ibc\b` | Type one B C | `Type Ibc` -> Type one B C |
+| `\bType\s+IIn\b` | Type two N | `Type IIn` -> Type two N |
+| `\bType\s+IIP\b` | Type two P | `Type IIP` -> Type two P |
+| `\bType\s+IIb\b` | Type two B | `Type IIb` -> Type two B |
+| `\bType\s+II\b` | Type two | `Type II` -> Type two |
+| `\bType\s+Ic\b` | Type one C | `Type Ic` -> Type one C |
+| `\bType\s+Ib\b` | Type one B | `Type Ib` -> Type one B |
+| `\bType\s+Ia\b` | Type one A | `Type Ia` -> Type one A |
+| `\bType\s+I\b` | Type one | `Type I` -> Type one |
+
 ### Fractions, ratios, and roots
 
 | Regex | Replacement | Example |
@@ -505,6 +528,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
+| `([+-]\d+(?:\.\d+)?)\s*\(\d+(?:\.\d+)?\)` | \1 | `+0.014(0.015)` -> +0.014 (strip parenthetical 2-sigma) |
 | `(\d+(?:\.\d+)?)\s*_\{?\s*-(\d+(?:\.\d+)?)\s*\}?\s*\^\{?\s*\+(\d+(?:\.\d+)?)\s*\}?` | \1 plus \3 minus \2 | `67.55_{-0.46}^{+0.53}` -> 67.55 plus 0.53 minus 0.46 |
 | `(\d+(?:\.\d+)?)\s*\^\{?\s*\+(\d+(?:\.\d+)?)\s*\}?\s*_\{?\s*-(\d+(?:\.\d+)?)\s*\}?` | \1 plus \2 minus \3 | `0.80^{+0.01}_{-0.01}` -> 0.80 plus 0.01 minus 0.01 |
 
