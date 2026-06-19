@@ -24,6 +24,8 @@ from arxaudio.models import Paper
 from arxaudio.settings import Settings
 
 REPO_URL = "https://github.com/James11222/arxaudio"
+ARXIV_URL = "https://arxiv.org"
+BENTY_URL = "https://www.benty-fields.com"
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +250,12 @@ def test_build_body_footer_uses_repo_url():
     assert "jsunseri" not in body
 
 
+def test_build_body_footer_includes_default_source_link():
+    body = _build_body([PAPER_MULTI], [], REPO_URL)
+    assert "Papers sourced from arXiv" in body
+    assert ARXIV_URL in body
+
+
 # ---------------------------------------------------------------------------
 # Test _build_html_body
 # ---------------------------------------------------------------------------
@@ -264,6 +272,13 @@ def test_build_html_body_uses_repo_url():
     html = _build_html_body([PAPER_MULTI], [], REPO_URL)
     assert REPO_URL in html
     assert "jsunseri" not in html
+
+
+def test_build_html_body_includes_default_source_link():
+    html = _build_html_body([PAPER_MULTI], [], REPO_URL)
+    assert "Papers sourced from" in html
+    assert "arXiv" in html
+    assert ARXIV_URL in html
 
 
 def test_build_html_body_links_and_authors():
@@ -599,6 +614,46 @@ def test_extra_section_absent_when_empty(tmp_path):
     assert captured_msg
     all_decoded = _decode_body(captured_msg[0])
     assert "More new papers" not in all_decoded
+
+
+def test_send_digest_uses_benty_source_link_when_configured(tmp_path):
+    mp3 = tmp_path / "digest.mp3"
+    mp3.write_bytes(b"\xff\xfb" + b"\x00" * 200)
+
+    captured_msg: list[bytes] = []
+
+    class CapturingSMTP:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self):
+            pass
+
+        def login(self, u, p):
+            pass
+
+        def sendmail(self, s, r, msg_bytes):
+            captured_msg.append(msg_bytes)
+
+    settings = _smtp_settings(587)
+    settings.paper_source = "benty"
+    settings.benty_base_url = BENTY_URL
+    with patch("arxaudio.emailer.smtplib.SMTP", CapturingSMTP):
+        send_digest(settings, mp3, [PAPER_MULTI], [])
+
+    assert captured_msg
+    all_decoded = _decode_body(captured_msg[0])
+    assert "Papers sourced from benty-fields" in all_decoded
+    assert BENTY_URL in all_decoded
 
 
 # ---------------------------------------------------------------------------

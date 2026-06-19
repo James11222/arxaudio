@@ -163,6 +163,23 @@ def test_intro_text_synthesized(tmp_path, tiny_mp3_path):
     assert "Welcome to ArXaudio." in tts.synthesized_texts
 
 
+def test_closing_text_synthesized_last(tmp_path, tiny_mp3_path):
+    """Optional closing_text must be included after papers."""
+    tts = FakeTTS(source_mp3=tiny_mp3_path)
+    papers = [_make_paper("p1", keep=True), _make_paper("p2", keep=True)]
+    out = tmp_path / "daily.mp3"
+    closing = "That's all we have for today."
+    build_daily_audio(
+        papers,
+        tts,
+        "v",
+        out,
+        closing_text=closing,
+        pause_seconds=0.05,
+    )
+    assert tts.synthesized_texts[-1] == closing
+
+
 def test_probe_duration_on_tiny_mp3(tiny_mp3_path):
     """probe_duration should return a positive float for a real MP3."""
     d = probe_duration(tiny_mp3_path)
