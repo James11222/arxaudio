@@ -176,6 +176,7 @@ def build_daily_audio(
     max_mb: float = 20,
     pause_seconds: float = 1.2,
     intro_text: str | None = None,
+    closing_text: str | None = None,
 ) -> Path | None:
     """Build the single daily MP3 from kept papers.
 
@@ -195,6 +196,7 @@ def build_daily_audio(
             the intro segment).
         intro_text: Optional spoken intro rendered before the first paper. The
             caller supplies the text (e.g. ``"ArXaudio digest for ... N papers."``).
+        closing_text: Optional spoken closing rendered after the final paper.
 
     Returns:
         The path to the final MP3, or ``None`` if no segments were produced.
@@ -230,6 +232,15 @@ def build_daily_audio(
                     paper.arxiv_id,
                     exc,
                 )
+
+        # Optional closing segment last.
+        if closing_text and closing_text.strip():
+            closing_path = tmp_dir / "closing.mp3"
+            try:
+                tts.synthesize(closing_text, voice, closing_path)
+                segments.append(closing_path)
+            except Exception as exc:  # noqa: BLE001 - closing is best-effort
+                logger.warning("Closing synthesis failed (%s); skipping closing.", exc)
 
         if not segments:
             logger.info("No segments synthesized successfully; producing no audio.")

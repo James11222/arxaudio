@@ -435,7 +435,11 @@ def run(args: argparse.Namespace) -> int:
             logger.error("DirectAudioBackend failed: %s", exc)
             mp3_path = None
     else:
-        intro_text = f"Arx audio digest for {today_human}. {len(kept)} papers."
+        intro_text = f"Ark audio digest for {today_human}. {len(kept)} papers."
+        closing_text = (
+            "That's all we have for today. "
+            "Thanks for listening to the ark audio podcast."
+        )
         mp3_path = audio.build_daily_audio(
             kept,
             tts,
@@ -444,6 +448,7 @@ def run(args: argparse.Namespace) -> int:
             max_mb=settings.max_mb,
             pause_seconds=settings.pause_seconds,
             intro_text=intro_text,
+            closing_text=closing_text,
         )
 
     if mp3_path is None:
