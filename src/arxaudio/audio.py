@@ -239,8 +239,11 @@ def build_daily_audio(
             try:
                 tts.synthesize(closing_text, voice, closing_path)
                 segments.append(closing_path)
-            except Exception as exc:  # noqa: BLE001 - closing is best-effort
-                logger.warning("Closing synthesis failed (%s); skipping closing.", exc)
+            except Exception as exc:  # noqa: BLE001 - optional closing must not block digest
+                logger.warning(
+                    "Closing synthesis failed (%s); digest will proceed without closing segment.",
+                    exc,
+                )
 
         if not segments:
             logger.info("No segments synthesized successfully; producing no audio.")

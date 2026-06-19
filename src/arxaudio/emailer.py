@@ -39,6 +39,9 @@ from arxaudio.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_SOURCE_NAME = "arXiv"
+DEFAULT_SOURCE_URL = "https://arxiv.org"
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -138,18 +141,18 @@ def _author_line(paper: Paper) -> str:
 
 
 def _paper_source_details(settings: Settings) -> tuple[str, str]:
-    """Return a display label + URL for the configured paper source."""
+    """Return ``(display_name, url)`` for the configured paper source."""
     if settings.paper_source == "benty":
         return "benty-fields", settings.benty_base_url
-    return "arXiv", "https://arxiv.org"
+    return DEFAULT_SOURCE_NAME, DEFAULT_SOURCE_URL
 
 
 def _build_body(
     audio_papers: list[Paper],
     extra_papers: list[Paper],
     repo_url: str,
-    source_name: str = "arXiv",
-    source_url: str = "https://arxiv.org",
+    source_name: str = DEFAULT_SOURCE_NAME,
+    source_url: str = DEFAULT_SOURCE_URL,
 ) -> str:
     """Return the plain-text email body (fallback for non-HTML clients)."""
     today = date.today().strftime("%A, %B %-d %Y")
@@ -219,15 +222,15 @@ def _build_html_body(
     audio_papers: list[Paper],
     extra_papers: list[Paper],
     repo_url: str,
-    source_name: str = "arXiv",
-    source_url: str = "https://arxiv.org",
+    source_name: str = DEFAULT_SOURCE_NAME,
+    source_url: str = DEFAULT_SOURCE_URL,
 ) -> str:
     """Return the HTML email body."""
     today = date.today().strftime("%A, %B %-d, %Y")
     n_audio = len(audio_papers)
     repo = html.escape(repo_url, quote=True)
-    source = html.escape(source_url, quote=True)
-    source_name_escaped = html.escape(source_name)
+    source_url_escaped = html.escape(source_url, quote=True)
+    source_name_escaped = html.escape(source_name, quote=True)
 
     def section(heading: str, papers: list[Paper], start: int) -> str:
         rows = "".join(
@@ -277,7 +280,7 @@ def _build_html_body(
         <tr><td style="padding:20px 32px 28px 32px;border-top:1px solid #ececec;">
           <p style="font-size:12px;color:#9aa0a6;margin:0;line-height:1.6;">
             Papers sourced from
-            <a href="{source}" style="color:#1a73e8;
+            <a href="{source_url_escaped}" style="color:#1a73e8;
             text-decoration:none;">{source_name_escaped}</a>.<br>
             Sent by <a href="{repo}" style="color:#1a73e8;
             text-decoration:none;">arxaudio</a>.<br>
