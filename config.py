@@ -30,7 +30,7 @@
 # PAPER_SOURCE controls where daily papers come from:
 #
 #   "arxiv"  (default) — fetch from arXiv RSS feeds for the CATEGORIES below,
-#            then rank with the local LLM using your preferences.md.
+#            then rank with the local LLM using your preferences.txt.
 #            No additional credentials needed.
 #
 #   "benty"  — fetch the day's papers already ML-ranked from your personal
@@ -68,11 +68,33 @@ CATEGORIES: list[str] = [
 
 LLM_BACKEND: str = "ollama"
 
-# OLLAMA_MODEL: the model pulled by `ollama pull <model>`.
-# qwen2.5:0.5b is tiny (~400 MB) and fast enough for title ranking decisions.
+# OLLAMA_MODEL: the model used for math-cleanup (process stage).
+# qwen2.5:0.5b is tiny (~400 MB) and fast enough for the mechanical task of
+# converting LaTeX notation to spoken English.
 # Larger options:  "qwen2.5:1.5b", "qwen2.5:3b", "llama3.2:1b"
 
 OLLAMA_MODEL: str = "qwen2.5:0.5b"
+
+# OLLAMA_RANK_MODEL: model used for the relevance-ranking stage only.
+# Leave empty to use OLLAMA_MODEL for both stages.
+# Ranking requires genuine topic comprehension (distinguishing adjacent fields,
+# honouring the exclusion list) so a larger model pays off here.
+# The rank stage makes only ONE LLM call per run, so a bigger model is cheap.
+# Example:  "qwen2.5:3b", "qwen3:4b"
+
+OLLAMA_RANK_MODEL: str = "qwen2.5:1.5b"
+
+# OLLAMA_TIMEOUT: per-request timeout in seconds for ollama API calls.
+# Increase if ranking or cleanup times out on slow hardware or large models.
+
+OLLAMA_TIMEOUT: float = 300.0
+
+# OLLAMA_NUM_CTX: KV-cache context window in tokens (input + output combined).
+# For non-thinking models 8192 is sufficient. Thinking models (qwen3, etc.)
+# generate a <think>…</think> chain before answering; with 40+ papers that
+# chain can exceed 10 000 tokens, so 32768 is a safe default for them.
+
+OLLAMA_NUM_CTX: int = 32768
 
 
 # ---------------------------------------------------------------------------

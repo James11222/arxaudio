@@ -65,28 +65,31 @@ def test_parse_always_a_permutation():
 def test_rank_clean_reorders():
     papers = _papers(3)
     llm = FakeLLM(responses=["3, 1, 2"])
-    ranked = rank_papers(papers, llm, PREFS)
+    ranked, system, _, reply = rank_papers(papers, llm, PREFS)
     assert _ids(ranked) == ["id.2", "id.0", "id.1"]
+    assert reply == "3, 1, 2"
+    assert PREFS in system
 
 
 def test_rank_prose_reply_parses():
     papers = _papers(3)
     llm = FakeLLM(responses=["I think the order is 2, 3, 1 — hope that helps!"])
-    ranked = rank_papers(papers, llm, PREFS)
+    ranked, _, _, reply = rank_papers(papers, llm, PREFS)
     assert _ids(ranked) == ["id.1", "id.2", "id.0"]
+    assert "2, 3, 1" in reply
 
 
 def test_rank_duplicate_and_out_of_range():
     papers = _papers(3)
     llm = FakeLLM(responses=["2, 2, 99, 1, 3"])
-    ranked = rank_papers(papers, llm, PREFS)
+    ranked, _, _, _ = rank_papers(papers, llm, PREFS)
     assert _ids(ranked) == ["id.1", "id.0", "id.2"]
 
 
 def test_rank_missing_indices_appended_arrival_order():
     papers = _papers(4)
     llm = FakeLLM(responses=["3"])  # only one supplied
-    ranked = rank_papers(papers, llm, PREFS)
+    ranked, _, _, _ = rank_papers(papers, llm, PREFS)
     # 3 first (index 2), then missing 0,1,3 in arrival order.
     assert _ids(ranked) == ["id.2", "id.0", "id.1", "id.3"]
 
@@ -94,22 +97,25 @@ def test_rank_missing_indices_appended_arrival_order():
 def test_rank_llm_error_arrival_order():
     papers = _papers(3)
     llm = FakeLLM(raise_mode=True)
-    ranked = rank_papers(papers, llm, PREFS)
+    ranked, system, _, reply = rank_papers(papers, llm, PREFS)
     assert _ids(ranked) == ["id.0", "id.1", "id.2"]
+    assert reply == ""
+    assert system == ""
 
 
 def test_rank_garbage_reply_arrival_order():
     papers = _papers(3)
     llm = FakeLLM(responses=["I cannot help with that."])
-    ranked = rank_papers(papers, llm, PREFS)
+    ranked, _, _, reply = rank_papers(papers, llm, PREFS)
     assert _ids(ranked) == ["id.0", "id.1", "id.2"]
+    assert reply == "I cannot help with that."
 
 
 def test_rank_always_a_permutation():
     papers = _papers(5)
     for reply in ["5,4,3,2,1", "2,2,2", "nonsense", "99,1", "1,2,3,4,5,6,7"]:
         llm = FakeLLM(responses=[reply])
-        ranked = rank_papers(papers, llm, PREFS)
+        ranked, _, _, _ = rank_papers(papers, llm, PREFS)
         assert sorted(_ids(ranked)) == sorted(_ids(papers))
         assert len(ranked) == len(papers)
 
@@ -117,10 +123,8 @@ def test_rank_always_a_permutation():
 def test_rank_preferences_in_system_prompt():
     papers = _papers(2)
     llm = FakeLLM(responses=["1, 2"])
-    rank_papers(papers, llm, "I only want papers about void statistics.")
-    assert len(llm.calls) == 1
-    system_prompt, _ = llm.calls[0]
-    assert "void statistics" in system_prompt
+    _, system, _, _ = rank_papers(papers, llm, "I only want papers about void statistics.")
+    assert "void statistics" in system
 
 
 def test_rank_titles_numbered_in_user_prompt():
@@ -136,14 +140,21 @@ def test_rank_titles_numbered_in_user_prompt():
 def test_rank_single_paper_no_llm_call():
     papers = _papers(1)
     llm = FakeLLM(responses=["1"])
-    ranked = rank_papers(papers, llm, PREFS)
+    ranked, system, prompt, reply = rank_papers(papers, llm, PREFS)
     assert _ids(ranked) == ["id.0"]
     assert llm.calls == []
+    assert system == ""
+    assert prompt == ""
+    assert reply == ""
 
 
 def test_rank_empty_returns_empty():
     llm = FakeLLM(responses=["1"])
-    assert rank_papers([], llm, PREFS) == []
+    ranked, system, prompt, reply = rank_papers([], llm, PREFS)
+    assert ranked == []
+    assert system == ""
+    assert prompt == ""
+    assert reply == ""
     assert llm.calls == []
 
 

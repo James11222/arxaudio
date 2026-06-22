@@ -27,7 +27,7 @@ DEFAULT_HOST = "http://localhost:11434"
 DEFAULT_TIMEOUT = 120.0  # seconds; tiny models on CI can still be slow to load
 
 # ollama defaults num_ctx to only 2048 tokens. Our filter/process prompts embed
-# the whole of preferences.md (~1.1k tokens) plus a full abstract (~0.4-0.7k),
+# the whole of preferences.txt (~1.1k tokens) plus a full abstract (~0.4-0.7k),
 # which can brush against or exceed 2048 — at which point llama.cpp silently
 # truncates the OLDEST tokens, mangling the system instructions and making a tiny
 # model emit garbage (e.g. discarding every paper). 4096 holds preferences + one
@@ -60,7 +60,7 @@ class OllamaBackend(LLMBackend):
         self.host = self._normalize_host(raw_host)
         self.timeout = timeout
         # Deterministic by default, with an explicit context window large enough
-        # to fit preferences.md + one abstract (see DEFAULT_NUM_CTX). Caller may
+        # to fit preferences.txt + one abstract (see DEFAULT_NUM_CTX). Caller may
         # override either (incl. temperature / num_ctx).
         self.options: dict[str, Any] = {
             "temperature": 0,

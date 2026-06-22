@@ -3,7 +3,7 @@
 Instead of one KEEP/DISCARD call per abstract (slow: one LLM round-trip per
 paper), we make exactly ONE stateless LLM call that sees ALL fetched paper
 *titles* at once, numbered in arrival order, with the user's research interests
-(from ``preferences.md``) as system context. The model returns the title numbers
+(from ``preferences.txt``) as system context. The model returns the title numbers
 ordered from most to least relevant. The pipeline then takes the top ``MAX_PAPERS``
 for full audio treatment and the next block for an email-only listing.
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # shape more than on content, so the examples show only the OUTPUT FORMAT (a bare
 # comma-separated list of numbers) and describe papers abstractly as "more/less
 # related to the interests" rather than naming any field. The only thing that
-# defines "relevant" is whatever the user wrote in ``preferences.md`` — the prompt
+# defines "relevant" is whatever the user wrote in ``preferences.txt`` — the prompt
 # works unchanged for a marine biologist or a particle theorist.
 _SYSTEM_TEMPLATE = """\
 You rank a researcher's daily arXiv titles by how well each matches their stated
@@ -98,7 +98,7 @@ def _parse_ranking(reply: str, n: int) -> list[int]:
 
 def rank_papers(
     papers: list[Paper], llm: LLMBackend, preferences: str
-) -> list[Paper]:
+) -> tuple[list[Paper], str, str, str]:
     """Return ``papers`` reordered by LLM relevance ranking of their titles.
 
     Makes exactly one stateless LLM call with all titles numbered in arrival
@@ -107,15 +107,22 @@ def rank_papers(
     order (and logs a warning). The returned list is always a permutation of the
     input.
 
+    Returns:
+        (ranked_papers, system_prompt, user_prompt, raw_reply) — the reordered
+        list, the system prompt sent to the model, the user prompt (numbered
+        titles), and the raw LLM response string. All strings are empty when no
+        LLM call was made (empty/single-paper input) or when the call failed
+        before a reply was received.
+
     Args:
         papers: papers to rank (not mutated; a reordered new list is returned).
         llm: stateless backend used for the single ranking call.
-        preferences: the user's ``preferences.md`` content, embedded verbatim.
+        preferences: the user's ``preferences.txt`` content, embedded verbatim.
     """
     if not papers:
-        return []
+        return [], "", "", ""
     if len(papers) == 1:
-        return list(papers)
+        return list(papers), "", "", ""
 
     system = _SYSTEM_TEMPLATE.format(preferences=preferences.strip())
     titles_block = "\n".join(
@@ -129,7 +136,7 @@ def rank_papers(
         logger.warning(
             "rank: LLM error, falling back to arrival order: %s", exc
         )
-        return list(papers)
+        return list(papers), system, prompt, ""
 
     # _parse_ranking always returns a full permutation, but distinguish the
     # degenerate "no usable numbers at all" and "partial" cases for clearer logs.
@@ -138,7 +145,7 @@ def rank_papers(
             "rank: reply had no usable numbers (%r); using arrival order",
             reply[:80],
         )
-        return list(papers)
+        return list(papers), system, prompt, reply
 
     order = _parse_ranking(reply, len(papers))
 
@@ -161,4 +168,4 @@ def rank_papers(
         len(ranked),
         ranked[0].arxiv_id,
     )
-    return ranked
+    return ranked, system, prompt, reply
