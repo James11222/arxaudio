@@ -181,7 +181,12 @@ def _save_rank_file(
                 label = "EMAIL-ONLY"
             else:
                 label = "UNSELECTED"
-            f.write(f"{i:>3}. [{label:<10}] {paper.arxiv_id}  {paper.title}\n")
+            score = (
+                f"{paper.relevance_score:4.1f}/10"
+                if paper.relevance_score is not None
+                else "    ?/10"
+            )
+            f.write(f"{i:>3}. {score} [{label:<10}] {paper.arxiv_id}  {paper.title}\n")
     logger.info("Rank log saved to %s", path)
 
 

@@ -3,19 +3,18 @@
 Instead of one KEEP/DISCARD call per abstract (slow: one LLM round-trip per
 paper), we make exactly ONE stateless LLM call that sees ALL fetched paper
 *titles* at once, numbered in arrival order, with the user's research interests
-(from ``preferences.txt``) as system context. The model returns the title numbers
-ordered from most to least relevant. The pipeline then takes the top ``MAX_PAPERS``
-for full audio treatment and the next block for an email-only listing.
+(from ``preferences.txt``) as system context. The model scores each title 0–10;
+papers are then sorted by score descending. The pipeline takes the top
+``MAX_PAPERS`` for full audio treatment and the next block for email-only.
 
 Design constraints (idea.md, PLAN.md):
 - One LLM call for the whole batch, context cleared between runs.
 - Must work with a tiny local model (qwen2.5:1.5b, 8192-token context), so the
   prompt is short, concrete, and example-anchored, and we only feed titles (not
   abstracts) to stay well inside the context window.
-- Never silently lose a paper: parsing is defensive and the returned list is
-  ALWAYS a permutation of the input. This is the analogue of filter.py's
-  "default to KEEP" policy — on any LLM error or an unusable reply we fall back
-  to arrival order (every paper survives, just unranked).
+- Never silently lose a paper: parsing is defensive and unscored papers receive
+  score 0. On any LLM error we fall back to arrival order (every paper survives,
+  just unranked). This is the analogue of filter.py's "default to KEEP" policy.
 """
 
 from __future__ import annotations
@@ -32,96 +31,82 @@ logger = logging.getLogger(__name__)
 # instructions far better than prose. ``{preferences}`` is filled per run.
 #
 # The framing is field-agnostic: a small model latches onto tone and example
-# shape more than on content, so the examples show only the OUTPUT FORMAT (a bare
-# comma-separated list of numbers) and describe papers abstractly as "more/less
-# related to the interests" rather than naming any field. The only thing that
-# defines "relevant" is whatever the user wrote in ``preferences.txt`` — the prompt
+# shape more than on content, so the examples show only the OUTPUT FORMAT
+# ("N: score") and describe papers abstractly. The only thing that defines
+# "relevant" is whatever the user wrote in ``preferences.txt`` — the prompt
 # works unchanged for a marine biologist or a particle theorist.
 _SYSTEM_TEMPLATE = """\
-You rank a researcher's daily arXiv titles by how well each matches their stated
-interests, most relevant first.
+You score a researcher's daily arXiv paper titles by relevance to their stated
+interests.
 
 The researcher's interests:
 ---
 {preferences}
 ---
 
-You will be given a numbered list of paper titles. Order ALL of the numbers from
-the title that best matches the interests above to the one that matches least.
-Judge ONLY against the interests above, including any "not interested in" notes —
-do not decide on your own that a topic is interesting or boring.
+Score EVERY title from 0 to 10:
+  10 = perfect match with the interests
+   0 = matches the "not interested in" list, or completely unrelated
 
-Answer with ONLY a comma-separated list of the numbers, most relevant first, and
-nothing else. Include every number exactly once. Do not explain.
+Output ONLY lines in the format "N: score". One line per paper. No explanation.
+NEVER reminder: papers on excluded topics must score 0.
 
-Example: given 4 titles, if title 3 matches the interests best, then 1, then 2,
-and title 4 matches least, the answer is:
-3, 1, 2, 4
-
-Output only the comma-separated numbers."""
+Example:
+1: 9
+2: 0
+3: 7
+4: 4"""
 
 _USER_TEMPLATE = """\
 Titles:
 {titles}
 
-Answer:"""
+Scores:"""
 
-# Pull every run of digits out of the reply, in order.
-_INT_RE = re.compile(r"\d+")
+# Match lines of the form "N: score" (integer or one decimal place).
+_SCORE_RE = re.compile(r"^\s*(\d+)\s*:\s*(\d+(?:\.\d+)?)", re.MULTILINE)
 
 
-def _parse_ranking(reply: str, n: int) -> list[int]:
-    """Turn a model reply into a 0-based ordering of the ``n`` papers.
+def _parse_scores(reply: str, n: int) -> list[float]:
+    """Extract per-paper scores from the model reply.
 
-    Extracts integers in the order they appear, treats them as 1-based title
-    numbers, dedupes keeping the first occurrence, drops anything out of range,
-    then appends any indices the reply omitted (in arrival order). The result is
-    always a permutation of ``range(n)``.
+    Returns a list of length ``n`` where index i holds the score for paper i+1
+    (1-based in the prompt). Papers the model omitted receive score 0.
     """
-    seen: set[int] = set()
-    order: list[int] = []
-    for match in _INT_RE.findall(reply):
-        num = int(match)
-        idx = num - 1  # titles are presented 1-based
-        if idx < 0 or idx >= n or idx in seen:
-            continue
-        seen.add(idx)
-        order.append(idx)
-
-    if len(order) < n:
-        # Partial/garbled reply: append whatever the model dropped, in order.
-        missing = [i for i in range(n) if i not in seen]
-        order.extend(missing)
-
-    return order
+    scores = [0.0] * n
+    for match in _SCORE_RE.finditer(reply):
+        idx = int(match.group(1)) - 1  # 1-based → 0-based
+        if 0 <= idx < n:
+            scores[idx] = min(10.0, float(match.group(2)))
+    return scores
 
 
 def rank_papers(
     papers: list[Paper], llm: LLMBackend, preferences: str
 ) -> tuple[list[Paper], str, str, str]:
-    """Return ``papers`` reordered by LLM relevance ranking of their titles.
+    """Score ``papers`` by LLM relevance (0–10) and return them sorted by score.
 
     Makes exactly one stateless LLM call with all titles numbered in arrival
     order and ``preferences`` as system context. Never raises and never loses a
     paper: on an LLM error or an unusable reply it returns the papers in arrival
     order (and logs a warning). The returned list is always a permutation of the
-    input.
+    input. Each paper's ``relevance_score`` field is set in-place.
 
     Returns:
-        (ranked_papers, system_prompt, user_prompt, raw_reply) — the reordered
-        list, the system prompt sent to the model, the user prompt (numbered
-        titles), and the raw LLM response string. All strings are empty when no
-        LLM call was made (empty/single-paper input) or when the call failed
-        before a reply was received.
+        (ranked_papers, system_prompt, user_prompt, raw_reply) — papers sorted
+        by score descending, the system prompt, the user prompt (numbered
+        titles), and the raw LLM response. All strings are empty when no LLM
+        call was made (empty/single-paper input) or when the call failed.
 
     Args:
         papers: papers to rank (not mutated; a reordered new list is returned).
-        llm: stateless backend used for the single ranking call.
+        llm: stateless backend used for the single scoring call.
         preferences: the user's ``preferences.txt`` content, embedded verbatim.
     """
     if not papers:
         return [], "", "", ""
     if len(papers) == 1:
+        papers[0].relevance_score = None
         return list(papers), "", "", ""
 
     system = _SYSTEM_TEMPLATE.format(preferences=preferences.strip())
@@ -133,39 +118,31 @@ def rank_papers(
     try:
         reply = llm.complete(system, prompt)
     except LLMError as exc:
-        logger.warning(
-            "rank: LLM error, falling back to arrival order: %s", exc
-        )
+        logger.warning("rank: LLM error, falling back to arrival order: %s", exc)
         return list(papers), system, prompt, ""
 
-    # _parse_ranking always returns a full permutation, but distinguish the
-    # degenerate "no usable numbers at all" and "partial" cases for clearer logs.
     if not any(ch.isdigit() for ch in reply):
         logger.warning(
-            "rank: reply had no usable numbers (%r); using arrival order",
+            "rank: reply had no usable scores (%r); using arrival order",
             reply[:80],
         )
         return list(papers), system, prompt, reply
 
-    order = _parse_ranking(reply, len(papers))
+    scores = _parse_scores(reply, len(papers))
 
-    # Count distinct in-range numbers the model actually supplied.
-    supplied = {
-        int(m) - 1
-        for m in _INT_RE.findall(reply)
-        if 0 <= int(m) - 1 < len(papers)
-    }
-    if len(supplied) < len(papers):
+    scored = sum(1 for s in scores if s > 0)
+    if scored < len(papers):
         logger.warning(
-            "rank: reply was partial/garbled (%r); missing ranks appended in "
-            "arrival order",
-            reply[:80],
+            "rank: %d of %d papers scored (rest default to 0)",
+            scored, len(papers),
         )
 
-    ranked = [papers[i] for i in order]
+    for paper, score in zip(papers, scores):
+        paper.relevance_score = score
+
+    ranked = sorted(papers, key=lambda p: p.relevance_score or 0.0, reverse=True)
     logger.info(
-        "rank: ordered %d papers; top is %s",
-        len(ranked),
-        ranked[0].arxiv_id,
+        "rank: scored %d papers; top is %s (%.1f/10)",
+        len(ranked), ranked[0].arxiv_id, ranked[0].relevance_score or 0.0,
     )
     return ranked, system, prompt, reply
