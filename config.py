@@ -82,19 +82,19 @@ OLLAMA_MODEL: str = "qwen2.5:0.5b"
 # The rank stage makes only ONE LLM call per run, so a bigger model is cheap.
 # Example:  "qwen2.5:3b", "qwen3:4b"
 
-OLLAMA_RANK_MODEL: str = "qwen3.5:2b"
+OLLAMA_RANK_MODEL: str = "qwen2.5:0.5b"
 
 # OLLAMA_TIMEOUT: per-request timeout in seconds for ollama API calls.
 # Increase if ranking or cleanup times out on slow hardware or large models.
 
-OLLAMA_TIMEOUT: float = 3000.0
+OLLAMA_TIMEOUT: float = 300.0
 
 # OLLAMA_NUM_CTX: KV-cache context window in tokens (input + output combined).
 # For non-thinking models 8192 is sufficient. Thinking models (qwen3, etc.)
 # generate a <think>…</think> chain before answering; with 40+ papers that
 # chain can exceed 10 000 tokens, so 32768 is a safe default for them.
 
-OLLAMA_NUM_CTX: int = 32768
+OLLAMA_NUM_CTX: int = 8192
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +181,7 @@ NOTEBOOKLM_TIMEOUT: int = 1200
 # If the generated audio exceeds this limit, audio.py will step down the
 # bitrate (via ffmpeg) until it fits.
 
-MAX_MB: int = 20
+MAX_MB: int = 15
 
 # PAUSE_SECONDS: length of the silence gap inserted between papers.
 
@@ -196,7 +196,7 @@ PAUSE_SECONDS: float = 1.2
 #     there is no email-only listing section.
 # Useful if you subscribe to very active categories and want a shorter digest.
 
-MAX_PAPERS: int = 20
+MAX_PAPERS: int = 10
 
 
 # ---------------------------------------------------------------------------

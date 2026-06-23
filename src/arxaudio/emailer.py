@@ -342,6 +342,25 @@ def _build_message(
 # SMTP transport
 # ---------------------------------------------------------------------------
 
+def _check_message_size(smtp: smtplib.SMTP, raw: bytes) -> None:
+    """Raise SMTPException if *raw* exceeds the server's advertised SIZE limit."""
+    try:
+        server_max = int(smtp.esmtp_features.get("size", 0))
+    except (ValueError, AttributeError):
+        return
+    if server_max and len(raw) > server_max:
+        mb = len(raw) / 1_000_000
+        limit_mb = server_max / 1_000_000
+        # Base64 encoding inflates the raw MP3 by ~37 %; work backwards to a
+        # safe MAX_MB value the user can plug into config.py.
+        safe_mp3_mb = int(server_max / 1_000_000 / 1.37)
+        raise smtplib.SMTPException(
+            f"Message too large: {mb:.1f} MB exceeds server limit of "
+            f"{limit_mb:.1f} MB. Reduce MAX_MB in config.py to "
+            f"~{safe_mp3_mb} to stay within the limit."
+        )
+
+
 def _send(
     settings: Settings,
     msg: MIMEMultipart,
@@ -360,17 +379,22 @@ def _send(
     try:
         if port == 465:
             logger.debug("Connecting via SMTP_SSL to %s:%d", host, port)
-            with smtplib.SMTP_SSL(host, port, timeout=30) as smtp:
+            with smtplib.SMTP_SSL(host, port, timeout=120) as smtp:
+                smtp.ehlo()
                 smtp.login(user, password)
-                smtp.sendmail(sender, [recipient], msg.as_bytes())
+                raw = msg.as_bytes()
+                _check_message_size(smtp, raw)
+                smtp.sendmail(sender, [recipient], raw)
         else:
             logger.debug("Connecting via STARTTLS to %s:%d", host, port)
-            with smtplib.SMTP(host, port, timeout=30) as smtp:
+            with smtplib.SMTP(host, port, timeout=120) as smtp:
                 smtp.ehlo()
                 smtp.starttls()
                 smtp.ehlo()
                 smtp.login(user, password)
-                smtp.sendmail(sender, [recipient], msg.as_bytes())
+                raw = msg.as_bytes()
+                _check_message_size(smtp, raw)
+                smtp.sendmail(sender, [recipient], raw)
 
     except smtplib.SMTPAuthenticationError as exc:
         raise smtplib.SMTPAuthenticationError(

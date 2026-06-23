@@ -279,6 +279,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "Defaults to ./output/arxaudio_YYYY-MM-DD.txt when no path is given."
         ),
     )
+    p.add_argument(
+        "--send-email",
+        metavar="MP3",
+        default=None,
+        help=(
+            "Skip the full pipeline and send an email with the given MP3 attached. "
+            "Useful for testing SMTP configuration. Paper lists will be empty."
+        ),
+    )
     return p
 
 
@@ -363,6 +372,27 @@ def run(args: argparse.Namespace) -> int:
     if args.max_papers is not None:
         settings.max_papers = args.max_papers
         logger.info("Override: max_papers=%d", settings.max_papers)
+
+    # --- Quick email test (--send-email) --------------------------------
+    if args.send_email is not None:
+        mp3 = Path(args.send_email)
+        if not mp3.exists():
+            logger.error("--send-email: file not found: %s", mp3)
+            return 1
+        if not settings.smtp_configured:
+            logger.error(
+                "--send-email: SMTP not configured. "
+                "Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD."
+            )
+            return 1
+        logger.info("Sending test email with %s ...", mp3)
+        try:
+            emailer.send_digest(settings, mp3, audio_papers=[], extra_papers=[])
+        except Exception as exc:
+            logger.error("Failed to send email: %s", exc)
+            return 1
+        logger.info("Test email sent to %s.", settings.effective_email_to)
+        return 0
 
     try:
         run_date = date.fromisoformat(args.date) if args.date else date.today()
