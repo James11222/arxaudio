@@ -82,7 +82,7 @@ OLLAMA_MODEL: str = "qwen2.5:0.5b"
 # The rank stage makes only ONE LLM call per run, so a bigger model is cheap.
 # Example:  "qwen2.5:3b", "qwen3:4b"
 
-OLLAMA_RANK_MODEL: str = "qwen3.5:2b"
+OLLAMA_RANK_MODEL: str = "qwen2.5:7b"
 
 # OLLAMA_TIMEOUT: per-request timeout in seconds for ollama API calls.
 # Increase if ranking or cleanup times out on slow hardware or large models.
