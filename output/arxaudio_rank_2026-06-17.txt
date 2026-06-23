@@ -1,0 +1,221 @@
+arxaudio rank log — 2026-06-17
+43 papers ranked, 10 audio, 10 email-only
+
+=== SYSTEM PROMPT ===
+You score a researcher's daily arXiv paper titles by relevance to their stated
+interests.
+
+The researcher's interests:
+---
+# arxaudio preferences
+#
+# Describe your research interests in plain English.
+# The filter LLM reads this whole file when deciding whether to keep or
+# discard each paper, so be as specific or as broad as you like.
+# You can add extra sections, URLs, or notes — the LLM reads free text.
+
+# Tips:
+# - Be concrete about methods, surveys, and datasets you care about.
+# - The "Not interested in:" section helps the model focus the filter.
+# - Changes here take effect on the next pipeline run (no code changes needed).
+# =============================================================================
+
+## Research interests
+
+I am a cosmologist and observational astrophysicist interested in the
+large-scale structure of the Universe and the tools used to map it.
+
+**Core topics I want to follow closely:**
+
+- Cosmological large-scale structure: power spectra, correlation functions,
+  baryon acoustic oscillations (BAO), redshift-space distortions (RSD)
+- Weak gravitational lensing: cosmic shear, shear calibration, shape
+  measurement, intrinsic alignments
+- Weak lensing systematics research: Point spread functions, baryonic effects,
+  other weak lensing measurement pipeline work
+- Galaxy clustering and halo occupation distributions (HOD)
+- Photometric and spectroscopic survey science, especially:
+  - LSST / Rubin Observatory (DESC science, DESC pipelines, image
+    simulations, photo-z)
+  - DESI (spectroscopic clustering, ELG/LRG/QSO target selection, full-shape
+    fits)
+  - Euclid, DES, HSC (where results connect to the above)
+- Photo-z estimation methods: machine learning photo-z, template fitting,
+  redshift calibration with cross-correlations
+- Field-level inference, simulation-based inference (SBI / likelihood-free),
+  and neural posterior estimation applied to cosmological data
+
+**Methods and tools I care about:**
+
+- Fisher forecasting and MCMC posterior analysis
+- Machine learning applied to cosmology: CNNs/ViTs on maps, graph networks
+  on halo catalogues, transformers for field summaries
+
+## Not interested in
+
+Please discard papers primarily focused on:
+
+- No pure high-energy particle theory or quantum field theory with no
+  observational/cosmological connection
+- No pure physics theory work, Feynman diagrams, QFT, string theory, etc.
+- No exoplanet atmospheres, habitability, and astrobiology
+- No solar physics, heliosphere, space weather
+- No stellar evolution, asteroseismology, or stellar populations (unless
+  directly relevant to photometric calibration of a survey I listed above)
+- No gravitational wave astrophysics (mergers, ringdown) unless the paper is
+  specifically about using GW standard sirens for H0 cosmology
+- No radio transients, fast radio bursts (FRBs) unless used as cosmological
+  probes of the intergalactic medium
+- No instrumentation and telescope design papers with no science results
+---
+
+Score EVERY title from 0 to 10:
+  10 = perfect match with the interests
+   0 = matches the "not interested in" list, or completely unrelated
+
+Output ONLY lines in the format "N: score". One line per paper. No explanation.
+NEVER reminder: papers on excluded topics must score 0.
+
+Example:
+1: 9
+2: 0
+3: 7
+4: 4
+
+=== USER PROMPT ===
+Titles:
+1. Increasing the sensitivity of full-shape galaxy clustering measurements in configuration-space with three-point statistics
+2. Reheating as a variational probe of cosmological observables
+3. sft-wick: A formalism and package for Feynman-diagram expansion and evaluation in stochastic field theories
+4. Statistical Field Theory for Weak Gravitational Lensing
+5. Fireworks at Cosmic Dawn: relieving BAO-CMB tensions with the Pop III.1 Flash
+6. Baryonic mass budgets in the central regions of the Bullet Cluster and their consistency with strong lensing in MOND
+7. Validation of the Hybrid Bias Expansion model for the galaxy bispectrum
+8. A self-consistent analytical model for both the photoionization rate and reionization history
+9. Moduli Stabilisation for ADD and the Dark Dimension Scenario
+10. Eppur non si trovano Vol. 3: Phoebe -- a Mirage of a Primordial Black Hole
+11. The impact of evolving cosmic filaments on mass and spin evolution of dark matter halos
+12. From Rags to Jeans: Axion Miniclusters from Early matter domination
+13. Testing X-ray selection effects with four rich, yet X--ray--faint, galaxy clusters
+14. BayeSN $\times$ Dovekie: Joint Photometric Cross-calibration and SED Modelling of Type Ia Supernovae
+15. Physics-guided discovery of dynamical dark-energy equations of state through iterative AI reasoning
+16. Cooling, conduction, compact objects: Gravothermal evolution of dissipative self-interacting dark matter halos
+17. Constraints on Cosmic Strings from the Curl-Mode CMB Lensing Power Spectrum measured by ACT DR6
+18. Solitary dwarf galaxy groups as tracers of primordial dark matter halos in the local Universe
+19. PHANTOM: A MATLAB and Octave Toolbox Connecting Linear Field Statistics to Dark Matter Halo Observables
+20. IllustrisTNG50 angular momentum maps: tracing the morpho-kinematic evolution of galaxies
+21. Resolving the Hubble Tension in the Early Dark Energy Framework with JWST and DESI Data
+22. From Evidence to Evident: Decisive Cosmological Evidence for the Normal Neutrino Mass Hierarchy
+23. On the robustness of the angular homogeneity scale $θ_H$: a comparative analysis of computational approaches
+24. Emergent Gauge Symmetries in Particle Physics and Cosmology
+25. Impact of lensing magnification on the power spectrum turnover
+26. Exploring Primordial Non-Gaussianity Measurements in the CSST Spectroscopic Survey
+27. Dynamical evolution of dark matter subhaloes in the Milky Way: role of the Galactic disc
+28. Onsite Calibration of the Shear-Shear Correlation
+29. Transient Bias for CP Domain Wall Decay and Dark Matter
+30. DESI Data Release 2 ELGs: Property-dependent subsamples, imaging systematics, and clustering
+31. Something green beneath the surface: The dynamical nature of Fossil Structures in IllustrisTNG-100
+32. On the later evolution of observationally selected protocluster candidates at $z\,{\gtrsim}\,5$
+33. Characterizing the Formation and Evolution of S0-galaxies (CaFES-0): Their formation pathways around Galaxy Clusters
+34. Reimagining SED Fitting with Cosmological Galaxy Simulations and Machine Learning
+35. Direct Tests of Black Hole Accretion Rate Prescriptions: I. Bondi Accretion at Different Scales
+36. The first detection of dense gas in a massive main-sequence galaxy at cosmic noon
+37. Ages of the resolved stellar populations inside the JWST/MIRI bubbles in NGC 628
+38. Magnetic Field Alignment of Young Stellar Object Motions in Nearby Star-Forming Regions
+39. A comparative study of O, Ne, Cl, and Ar in Hii regions and PNe of the Galactic disk: Temporal evolution of radial gradients?
+40. Searching for a superdisk in radio galaxy J0116-473
+41. Disentangling the Distant Stellar Halo Using K-Giants in the DESI Year 3 Data
+42. Dust colour, phase bahaviour, and Monte Carlo modelling of interstellar comet 3I/ATLAS from 4 au pre- to 4 au post-perihelion
+43. PMO Polaris CO survey. I. A 100 deg$^2$ view of the Polaris Flare
+
+Scores:
+
+=== RAW REPLY ===
+1: 9
+2: 8
+3: 0
+4: 9
+5: 6
+6: 4
+7: 9
+8: 6
+9: 0
+10: 3
+11: 8
+12: 3
+13: 5
+14: 8
+15: 9
+16: 5
+17: 8
+18: 7
+19: 8
+20: 7
+21: 8
+22: 5
+23: 7
+24: 3
+25: 9
+26: 6
+27: 4
+28: 9
+29: 3
+30: 9
+31: 6
+32: 6
+33: 5
+34: 8
+35: 2
+36: 5
+37: 5
+38: 2
+39: 2
+40: 1
+41: 8
+42: 1
+43: 5
+
+=== RANKING ===
+  1.  9.0/10 [AUDIO     ] 2606.19518  Increasing the sensitivity of full-shape galaxy clustering measurements in configuration-space with three-point statistics
+  2.  9.0/10 [AUDIO     ] 2606.19472  Statistical Field Theory for Weak Gravitational Lensing
+  3.  9.0/10 [AUDIO     ] 2606.19452  Validation of the Hybrid Bias Expansion model for the galaxy bispectrum
+  4.  9.0/10 [AUDIO     ] 2606.19427  Physics-guided discovery of dynamical dark-energy equations of state through iterative AI reasoning
+  5.  9.0/10 [AUDIO     ] 2606.18908  Impact of lensing magnification on the power spectrum turnover
+  6.  9.0/10 [AUDIO     ] 2606.18705  Onsite Calibration of the Shear-Shear Correlation
+  7.  9.0/10 [AUDIO     ] 2606.18581  DESI Data Release 2 ELGs: Property-dependent subsamples, imaging systematics, and clustering
+  8.  8.0/10 [AUDIO     ] 2606.19513  Reheating as a variational probe of cosmological observables
+  9.  8.0/10 [AUDIO     ] 2606.19443  The impact of evolving cosmic filaments on mass and spin evolution of dark matter halos
+ 10.  8.0/10 [AUDIO     ] 2606.19429  BayeSN $\times$ Dovekie: Joint Photometric Cross-calibration and SED Modelling of Type Ia Supernovae
+ 11.  8.0/10 [EMAIL-ONLY] 2606.19337  Constraints on Cosmic Strings from the Curl-Mode CMB Lensing Power Spectrum measured by ACT DR6
+ 12.  8.0/10 [EMAIL-ONLY] 2606.19104  PHANTOM: A MATLAB and Octave Toolbox Connecting Linear Field Statistics to Dark Matter Halo Observables
+ 13.  8.0/10 [EMAIL-ONLY] 2606.19090  Resolving the Hubble Tension in the Early Dark Energy Framework with JWST and DESI Data
+ 14.  8.0/10 [EMAIL-ONLY] 2606.19447  Reimagining SED Fitting with Cosmological Galaxy Simulations and Machine Learning
+ 15.  8.0/10 [EMAIL-ONLY] 2606.18849  Disentangling the Distant Stellar Halo Using K-Giants in the DESI Year 3 Data
+ 16.  7.0/10 [EMAIL-ONLY] 2606.19193  Solitary dwarf galaxy groups as tracers of primordial dark matter halos in the local Universe
+ 17.  7.0/10 [EMAIL-ONLY] 2606.19099  IllustrisTNG50 angular momentum maps: tracing the morpho-kinematic evolution of galaxies
+ 18.  7.0/10 [EMAIL-ONLY] 2606.18975  On the robustness of the angular homogeneity scale $θ_H$: a comparative analysis of computational approaches
+ 19.  6.0/10 [EMAIL-ONLY] 2606.19459  Fireworks at Cosmic Dawn: relieving BAO-CMB tensions with the Pop III.1 Flash
+ 20.  6.0/10 [EMAIL-ONLY] 2606.19449  A self-consistent analytical model for both the photoionization rate and reionization history
+ 21.  6.0/10 [UNSELECTED] 2606.18744  Exploring Primordial Non-Gaussianity Measurements in the CSST Spectroscopic Survey
+ 22.  6.0/10 [UNSELECTED] 2606.19478  Something green beneath the surface: The dynamical nature of Fossil Structures in IllustrisTNG-100
+ 23.  6.0/10 [UNSELECTED] 2606.19463  On the later evolution of observationally selected protocluster candidates at $z\,{\gtrsim}\,5$
+ 24.  5.0/10 [UNSELECTED] 2606.19434  Testing X-ray selection effects with four rich, yet X--ray--faint, galaxy clusters
+ 25.  5.0/10 [UNSELECTED] 2606.19428  Cooling, conduction, compact objects: Gravothermal evolution of dissipative self-interacting dark matter halos
+ 26.  5.0/10 [UNSELECTED] 2606.18987  From Evidence to Evident: Decisive Cosmological Evidence for the Normal Neutrino Mass Hierarchy
+ 27.  5.0/10 [UNSELECTED] 2606.19461  Characterizing the Formation and Evolution of S0-galaxies (CaFES-0): Their formation pathways around Galaxy Clusters
+ 28.  5.0/10 [UNSELECTED] 2606.19282  The first detection of dense gas in a massive main-sequence galaxy at cosmic noon
+ 29.  5.0/10 [UNSELECTED] 2606.19248  Ages of the resolved stellar populations inside the JWST/MIRI bubbles in NGC 628
+ 30.  5.0/10 [UNSELECTED] 2606.18637  PMO Polaris CO survey. I. A 100 deg$^2$ view of the Polaris Flare
+ 31.  4.0/10 [UNSELECTED] 2606.19454  Baryonic mass budgets in the central regions of the Bullet Cluster and their consistency with strong lensing in MOND
+ 32.  4.0/10 [UNSELECTED] 2606.18708  Dynamical evolution of dark matter subhaloes in the Milky Way: role of the Galactic disc
+ 33.  3.0/10 [UNSELECTED] 2606.19442  Eppur non si trovano Vol. 3: Phoebe -- a Mirage of a Primordial Black Hole
+ 34.  3.0/10 [UNSELECTED] 2606.19439  From Rags to Jeans: Axion Miniclusters from Early matter domination
+ 35.  3.0/10 [UNSELECTED] 2606.19403  Emergent Gauge Symmetries in Particle Physics and Cosmology
+ 36.  3.0/10 [UNSELECTED] 2606.18669  Transient Bias for CP Domain Wall Decay and Dark Matter
+ 37.  2.0/10 [UNSELECTED] 2606.19285  Direct Tests of Black Hole Accretion Rate Prescriptions: I. Bondi Accretion at Different Scales
+ 38.  2.0/10 [UNSELECTED] 2606.19094  Magnetic Field Alignment of Young Stellar Object Motions in Nearby Star-Forming Regions
+ 39.  2.0/10 [UNSELECTED] 2606.19061  A comparative study of O, Ne, Cl, and Ar in Hii regions and PNe of the Galactic disk: Temporal evolution of radial gradients?
+ 40.  1.0/10 [UNSELECTED] 2606.18998  Searching for a superdisk in radio galaxy J0116-473
+ 41.  1.0/10 [UNSELECTED] 2606.18751  Dust colour, phase bahaviour, and Monte Carlo modelling of interstellar comet 3I/ATLAS from 4 au pre- to 4 au post-perihelion
+ 42.  0.0/10 [UNSELECTED] 2606.19480  sft-wick: A formalism and package for Feynman-diagram expansion and evaluation in stochastic field theories
+ 43.  0.0/10 [UNSELECTED] 2606.19440  Moduli Stabilisation for ADD and the Dark Dimension Scenario
