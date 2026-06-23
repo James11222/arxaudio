@@ -16,7 +16,7 @@ on:
     # 00:00 UTC / 20:00 ET the previous evening), so a morning-UTC run picks up
     # the freshest batch. Adjust the cron to your own timezone/taste:
     #   https://crontab.guru/  — fields are: minute hour day-of-month month day-of-week
-    - cron: "37 10 * * 1-5"
+    - cron: "37 8 * * 1-5"
   workflow_dispatch:
     inputs:
       skip_email:
