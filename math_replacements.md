@@ -377,7 +377,8 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\\sigma_8\b` | sigma eight | `\sigma_8` -> sigma eight |
 | `\\sigma_\{8\}` | sigma eight | `\sigma_{8}` -> sigma eight |
 | `\bsigma_8\b` | sigma eight | bare `sigma_8` -> sigma eight |
-| `\bomega_m\b` | omega sub m | bare `omega_m` -> omega sub m |
+| `\bomega_m\b` | omega m | bare `omega_m` -> omega m |
+| `(.)\^\{?\\circ\}?` | \1 degrees | `30^\circ` or `30^{\circ}` -> 30 degrees (avoids "to the power of degrees") |
 | `H_0\b` | H naught | `H_0` -> H naught |
 | `H_\{0\}` | H naught | `H_{0}` -> H naught |
 | `M_\{?\\?star\}?` | stellar mass | `M_\star` or `M_star` -> stellar mass |
@@ -552,17 +553,25 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | Regex | Replacement | Example |
 |-------|-------------|---------|
 | `([A-Za-z])_\{([^{}]+)\}\^\{?(-?\w+)\}?` | \1 sub \2 to the \3 | `x_{i,j}^k` -> x sub i,j to the k |
-| `([A-Za-z])_([A-Za-z0-9])\^\{?(-?\w+)\}?` | \1 sub \2 to the \3 | `x_i^2` -> x sub i to the 2 |
+| `([A-Za-z])_([A-Za-z0-9])\^2\b` | \1 \2 squared | `x_i^2` -> x i squared |
+| `([A-Za-z])_([A-Za-z0-9])\^3\b` | \1 \2 cubed | `x_i^3` -> x i cubed |
+| `([A-Za-z])_([A-Za-z0-9])\^\{2\}` | \1 \2 squared | `x_i^{2}` -> x i squared |
+| `([A-Za-z])_([A-Za-z0-9])\^\{3\}` | \1 \2 cubed | `x_i^{3}` -> x i cubed |
+| `([A-Za-z])_([A-Za-z0-9])\^\{([A-Za-z0-9])\}` | \1 \2 \3 | `x_i^{k}` -> x i k |
+| `([A-Za-z])_([A-Za-z0-9])\^([A-Za-z0-9])\b` | \1 \2 \3 | `x_i^k` -> x i k |
+| `([A-Za-z])_([A-Za-z0-9])\^\{?(-?\w+)\}?` | \1 \2 to the \3 | `x_i^{n+1}` -> x i to the n+1 |
 | `([A-Za-z])\^2\b` | \1 squared | `x^2` -> x squared |
 | `([A-Za-z])\^3\b` | \1 cubed | `x^3` -> x cubed |
 | `([A-Za-z])\^\{2\}` | \1 squared | `x^{2}` -> x squared |
 | `([A-Za-z])\^\{3\}` | \1 cubed | `x^{3}` -> x cubed |
-| `([A-Za-z])\^\{(-?\w+)\}` | \1 to the \2 | `x^{k}` -> x to the k |
-| `([A-Za-z])\^(-?\w+)` | \1 to the \2 | `x^k` -> x to the k |
+| `([A-Za-z])\^\{([A-Za-z0-9])\}` | \1 \2 | `x^{k}` -> x k (single char, 2/3 already handled) |
+| `([A-Za-z])\^([A-Za-z0-9])\b` | \1 \2 | `x^k` -> x k (single char, 2/3 already handled) |
+| `([A-Za-z])\^\{(-?\w+)\}` | \1 to the \2 | `x^{n+1}` -> x to the n+1 |
+| `([A-Za-z])\^(-?\w+)` | \1 to the \2 | `x^{long}` -> x to the long |
 | `(\d+(?:\.\d+)?)\^\{([^{}]+)\}` | \1 to the \2 | `1.8^{+1.0}` -> 1.8 to the +1.0 |
 | `(\d+(?:\.\d+)?)\^(-?\w+)` | \1 to the \2 | `1.8^2` -> 1.8 to the 2 |
 | `([A-Za-z])_\{([^{}]+)\}` | \1 sub \2 | `x_{i,j}` -> x sub i,j |
-| `([A-Za-z])_([A-Za-z0-9])` | \1 sub \2 | `x_i` -> x sub i |
+| `([A-Za-z])_([A-Za-z0-9])` | \1 \2 | `x_i` -> x i (single char; drop "sub") |
 | `\)_\{([^{}]+)\}` | ) sub \1 | `)_{C}` -> ) sub C |
 | `\)_([A-Za-z0-9])` | ) sub \1 | `)_C` -> ) sub C |
 | `_\{([^{}]+)\}` | sub \1 | `_{i,j}` -> sub i,j (fallback for non-ASCII leading char; glue fixed by literal table) |
@@ -580,5 +589,6 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | `([A-Za-z0-9])\s*=\s*([A-Za-z0-9])` | \1 equals \2 | `n = 3` -> n equals 3 |
 | `\\,` |  | `\,` (thin space) -> removed |
 | `\\;` |  | `\;` -> removed |
+| `([=:])\(` | \1 ( | `=(5+5)` -> `= (5+5)`, `:(` -> `: (` (prevents TTS reading as sad-face emoticon) |
 | `\^\*` | ` star` | `A^*` -> A star (e.g. Sgr A*) |
 | `\^` | ` to the power of ` | leftover `^` -> to the power of |

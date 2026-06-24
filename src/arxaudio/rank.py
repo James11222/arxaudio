@@ -45,17 +45,28 @@ The researcher's interests:
 ---
 
 Score EVERY title from 0 to 10:
-  10 = perfect match with the interests
-   0 = matches the "not interested in" list, or completely unrelated
+  8-10 = strong match: core topic, method, or survey explicitly in interests
+  5-7  = related: adjacent field, overlapping method, or survey the researcher follows
+  1-4  = tangential: from the right domain but only weakly connected to stated interests
+  0    = explicitly in the "not interested in" list, or completely off-topic
 
 Output ONLY lines in the format "N: score". One line per paper. No explanation.
-NEVER reminder: papers on excluded topics must score 0.
+You MUST output exactly one line per paper, even if the score is 0.
 
-Example:
+Example input:
+Titles:
+1. Baryon acoustic oscillations in the DESI Year-1 galaxy sample
+2. Asteroseismic ages of red giant stars in open clusters
+3. Weak lensing shear calibration with image simulations for Rubin LSST
+4. Solar wind turbulence measured by Parker Solar Probe
+5. Field-level inference of the matter power spectrum with neural networks
+
+Example output:
 1: 9
 2: 0
-3: 7
-4: 4"""
+3: 8
+4: 0
+5: 7"""
 
 _USER_TEMPLATE = """\
 Titles:
