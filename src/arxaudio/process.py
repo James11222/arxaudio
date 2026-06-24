@@ -102,8 +102,8 @@ def decode_latex_name(name: str) -> str:
     return name
 
 # How far the LLM output may differ from the regex-pass length before we reject
-# it as paraphrasing/chatter. 0.20 == 20%.
-_LENGTH_TOLERANCE = 0.20
+# it as paraphrasing/chatter. 0.12 == 12% (~180 chars on a 1500-char abstract).
+_LENGTH_TOLERANCE = 0.12
 
 # A correct spoken-text polish contains NO math delimiters — the deterministic
 # pass already stripped every ``$``, brace, and hard-to-pronounce command. A
