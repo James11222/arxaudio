@@ -138,7 +138,7 @@ jobs:
           if [ "${{ github.event.inputs.skip_email }}" = "true" ]; then
             ARGS+=(--no-email)
           fi
-          python -m arxaudio.pipeline "${ARGS[@]}"
+          python -m arxaudio.pipeline --output-text "${ARGS[@]}"
 
       - name: Upload MP3 artifact
         if: always()
@@ -148,4 +148,13 @@ jobs:
           path: output/*.mp3
           retention-days: 14
           # Zero-paper days produce no MP3; that's normal, don't fail the upload.
+          if-no-files-found: ignore
+
+      - name: Upload text artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arxaudio-text
+          path: output/*.txt
+          retention-days: 14
           if-no-files-found: ignore
