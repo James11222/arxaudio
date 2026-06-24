@@ -43,7 +43,7 @@
 #                               password not reused elsewhere)
 #            Optionally set BENTY_BASE_URL to override the default base URL.
 
-PAPER_SOURCE: str = "arxiv"  # "arxiv" or "benty"
+PAPER_SOURCE: str = "benty"  # "arxiv" or "benty"
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ LLM_BACKEND: str = "ollama"
 # converting LaTeX notation to spoken English.
 # Larger options:  "qwen2.5:1.5b", "qwen2.5:3b", "llama3.2:1b"
 
-OLLAMA_MODEL: str = "qwen2.5:0.5b"
+OLLAMA_MODEL: str = "qwen2.5:1.5b"
 
 # OLLAMA_RANK_MODEL: model used for the relevance-ranking stage only.
 # Leave empty to use OLLAMA_MODEL for both stages.
@@ -196,7 +196,7 @@ PAUSE_SECONDS: float = 1.2
 #     there is no email-only listing section.
 # Useful if you subscribe to very active categories and want a shorter digest.
 
-MAX_PAPERS: int = 10
+MAX_PAPERS: int = 20
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ MAX_PAPERS: int = 10
 # The pipeline appends the date and paper count automatically, e.g.:
 #   "ArXaudio Digest — 2026-06-11 (7 papers)"
 
-EMAIL_SUBJECT_PREFIX: str = "arXaudio Digest"
+EMAIL_SUBJECT_PREFIX: str = "ArXaudio Digest"
 
 
 # ---------------------------------------------------------------------------
@@ -224,4 +224,4 @@ EMAIL_SUBJECT_PREFIX: str = "arXaudio Digest"
 # REPO_URL: shown in the email footer ("Sent by arxaudio").  When you fork
 # this project, point it at YOUR fork so the link in your digest is correct.
 
-REPO_URL: str = "https://github.com/ShrihanSolo/arxaudio/tree/shrihan"
+REPO_URL: str = "https://github.com/James11222/arxaudio"
