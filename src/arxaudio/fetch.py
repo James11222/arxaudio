@@ -43,6 +43,7 @@ from datetime import date, datetime, timezone
 import feedparser
 
 from arxaudio.models import Paper
+from arxaudio.process import decode_latex_name
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,7 @@ def _parse_authors(entry: object) -> list[str]:
     for raw in raw_authors:
         name = raw.get("name", "") or ""
         for part in name.split(","):
-            part = _normalise_whitespace(part)
+            part = decode_latex_name(_normalise_whitespace(part))
             if part:
                 authors.append(part)
     return authors
