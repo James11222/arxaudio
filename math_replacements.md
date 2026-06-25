@@ -517,6 +517,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | `\bmas\b` | milliarcseconds | `mas` -> milliarcseconds |
 | `\bmag\b` | magnitudes | `mag` -> magnitudes |
 | `\bdex\b` | dex | `dex` -> dex |
+| `\bK\b` | kelvin | `3000 K` -> 3000 kelvin |
 
 ### Powers of ten and scientific notation (before generic exponent rule)
 
@@ -583,7 +584,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | `(\d)\s*%` | \1 percent | `5%` -> 5 percent |
 | `(\d)percent` | \1 percent | `80percent` -> 80 percent (glued) |
 | `(alpha\|beta\|gamma\|delta\|epsilon\|zeta\|eta\|theta\|kappa\|lambda\|mu\|nu\|xi\|pi\|rho\|sigma\|tau\|phi\|chi\|psi\|omega)sub\b` | \1 sub | `alphasub CO` -> alpha sub CO (space recovery after Unicode Greek subscript) |
-| `([A-Za-z0-9])\s*/\s*([A-Za-z])` | \1 per \2 | `solar masses/h` -> solar masses per h |
+| `([A-Za-z0-9])\s*/\s*([a-z])` | \1 per \2 | `solar masses/h` -> solar masses per h |
 | `([A-Za-z0-9])\s*<\s*([A-Za-z0-9])` | \1 less than \2 | `chi squared < 1` -> chi squared less than 1 |
 | `([A-Za-z0-9])\s*>\s*([A-Za-z0-9])` | \1 greater than \2 | `z > 2` -> z greater than 2 |
 | `([A-Za-z0-9])\s*=\s*([A-Za-z0-9])` | \1 equals \2 | `n = 3` -> n equals 3 |

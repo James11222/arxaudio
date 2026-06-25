@@ -60,13 +60,23 @@ Titles:
 3. Weak lensing shear calibration with image simulations for Rubin LSST
 4. Solar wind turbulence measured by Parker Solar Probe
 5. Field-level inference of the matter power spectrum with neural networks
+6. Machine learning methods for photometric redshift estimation in wide-field surveys
+7. Exoplanet transit timing variations in multi-planet systems
+8. Chemical enrichment history of the Milky Way bulge from spectroscopic surveys
+9. Primordial gravitational waves constraints from CMB B-mode polarization
+10. Protein folding dynamics in membrane-bound enzymes
 
 Example output:
-1: 9
-2: 0
-3: 8
+1: 8
+2: 1
+3: 9
 4: 0
-5: 7"""
+5: 10
+6: 7
+7: 2
+8: 4
+9: 6
+10: 0"""
 
 _USER_TEMPLATE = """\
 Titles:
