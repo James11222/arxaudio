@@ -111,7 +111,7 @@ TTS_BACKEND: str = "edge"
 # Good English neural voices:  en-US-AndrewNeural, en-US-JennyNeural,
 #                               en-GB-RyanNeural, en-AU-NatashaNeural
 
-TTS_VOICE: str = "en-US-AndrewNeural"
+TTS_VOICE: str = "en-GB-RyanNeural"
 
 # TTS_SPEED: narration speed multiplier relative to the voice's normal pace.
 #   1.0  = normal,  0.8 = slower,  1.2 / 1.5 = faster,  2.0 = double speed.
