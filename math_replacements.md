@@ -201,6 +201,7 @@ they match whether or not the LaTeX command survived earlier passes.
 | Match | Spoken |
 |-------|--------|
 | `\pm` | ` plus or minus ` |
+| `+/-` | ` plus or minus ` |
 | `\mp` | ` minus or plus ` |
 | `\times` | ` times ` |
 | `\cdot` | ` times ` |
@@ -376,7 +377,8 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `\\sigma_8\b` | sigma eight | `\sigma_8` -> sigma eight |
 | `\\sigma_\{8\}` | sigma eight | `\sigma_{8}` -> sigma eight |
 | `\bsigma_8\b` | sigma eight | bare `sigma_8` -> sigma eight |
-| `\bomega_m\b` | omega sub m | bare `omega_m` -> omega sub m |
+| `\bomega_m\b` | omega m | bare `omega_m` -> omega m |
+| `(.)\^\{?\\circ\}?` | \1 degrees | `30^\circ` or `30^{\circ}` -> 30 degrees (avoids "to the power of degrees") |
 | `H_0\b` | H naught | `H_0` -> H naught |
 | `H_\{0\}` | H naught | `H_{0}` -> H naught |
 | `M_\{?\\?star\}?` | stellar mass | `M_\star` or `M_star` -> stellar mass |
@@ -390,6 +392,28 @@ The parser reads the `Regex` and `Replacement` columns; `Example` is docs only.
 | `R_\{\\odot\}` | solar radii | `R_{\odot}` -> solar radii |
 | `f_\{?NL\}?\^\{?loc(?:al)?\}?` | f N L local | `f_{NL}^{loc}` -> f N L local |
 | `f_\{?NL\}?` | f N L | `f_NL` or `f_{NL}` -> f N L |
+
+### Supernova types (most-specific subtypes first to avoid partial matches)
+
+| Regex | Replacement | Example |
+|-------|-------------|---------|
+| `\bSNe?\s*Ibc\b` | SN one B C | `SNIbc` or `SN Ibc` -> SN one B C |
+| `\bSNe?\s*IIn\b` | SN two N | `SNIIn` or `SN IIn` -> SN two N |
+| `\bSNe?\s*IIP\b` | SN two P | `SNIIP` or `SN IIP` -> SN two P |
+| `\bSNe?\s*IIb\b` | SN two B | `SNIIb` or `SN IIb` -> SN two B |
+| `\bSNe?\s*II\b` | SN two | `SNII` or `SN II` -> SN two |
+| `\bSNe?\s*Ic\b` | SN one C | `SNIc` or `SN Ic` -> SN one C |
+| `\bSNe?\s*Ib\b` | SN one B | `SNIb` or `SN Ib` -> SN one B |
+| `\bSNe?\s*Ia\b` | SN one A | `SNIa` or `SN Ia` -> SN one A |
+| `\bType\s+Ibc\b` | Type one B C | `Type Ibc` -> Type one B C |
+| `\bType\s+IIn\b` | Type two N | `Type IIn` -> Type two N |
+| `\bType\s+IIP\b` | Type two P | `Type IIP` -> Type two P |
+| `\bType\s+IIb\b` | Type two B | `Type IIb` -> Type two B |
+| `\bType\s+II\b` | Type two | `Type II` -> Type two |
+| `\bType\s+Ic\b` | Type one C | `Type Ic` -> Type one C |
+| `\bType\s+Ib\b` | Type one B | `Type Ib` -> Type one B |
+| `\bType\s+Ia\b` | Type one A | `Type Ia` -> Type one A |
+| `\bType\s+I\b` | Type one | `Type I` -> Type one |
 
 ### Fractions, ratios, and roots
 
@@ -493,6 +517,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | `\bmas\b` | milliarcseconds | `mas` -> milliarcseconds |
 | `\bmag\b` | magnitudes | `mag` -> magnitudes |
 | `\bdex\b` | dex | `dex` -> dex |
+| `\bK\b` | kelvin | `3000 K` -> 3000 kelvin |
 
 ### Powers of ten and scientific notation (before generic exponent rule)
 
@@ -505,6 +530,7 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 
 | Regex | Replacement | Example |
 |-------|-------------|---------|
+| `([+-]\d+(?:\.\d+)?)\s*\(\d+(?:\.\d+)?\)` | \1 | `+0.014(0.015)` -> +0.014 (strip parenthetical 2-sigma) |
 | `(\d+(?:\.\d+)?)\s*_\{?\s*-(\d+(?:\.\d+)?)\s*\}?\s*\^\{?\s*\+(\d+(?:\.\d+)?)\s*\}?` | \1 plus \3 minus \2 | `67.55_{-0.46}^{+0.53}` -> 67.55 plus 0.53 minus 0.46 |
 | `(\d+(?:\.\d+)?)\s*\^\{?\s*\+(\d+(?:\.\d+)?)\s*\}?\s*_\{?\s*-(\d+(?:\.\d+)?)\s*\}?` | \1 plus \2 minus \3 | `0.80^{+0.01}_{-0.01}` -> 0.80 plus 0.01 minus 0.01 |
 
@@ -528,17 +554,25 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | Regex | Replacement | Example |
 |-------|-------------|---------|
 | `([A-Za-z])_\{([^{}]+)\}\^\{?(-?\w+)\}?` | \1 sub \2 to the \3 | `x_{i,j}^k` -> x sub i,j to the k |
-| `([A-Za-z])_([A-Za-z0-9])\^\{?(-?\w+)\}?` | \1 sub \2 to the \3 | `x_i^2` -> x sub i to the 2 |
+| `([A-Za-z])_([A-Za-z0-9])\^2\b` | \1 \2 squared | `x_i^2` -> x i squared |
+| `([A-Za-z])_([A-Za-z0-9])\^3\b` | \1 \2 cubed | `x_i^3` -> x i cubed |
+| `([A-Za-z])_([A-Za-z0-9])\^\{2\}` | \1 \2 squared | `x_i^{2}` -> x i squared |
+| `([A-Za-z])_([A-Za-z0-9])\^\{3\}` | \1 \2 cubed | `x_i^{3}` -> x i cubed |
+| `([A-Za-z])_([A-Za-z0-9])\^\{([A-Za-z0-9])\}` | \1 \2 \3 | `x_i^{k}` -> x i k |
+| `([A-Za-z])_([A-Za-z0-9])\^([A-Za-z0-9])\b` | \1 \2 \3 | `x_i^k` -> x i k |
+| `([A-Za-z])_([A-Za-z0-9])\^\{?(-?\w+)\}?` | \1 \2 to the \3 | `x_i^{n+1}` -> x i to the n+1 |
 | `([A-Za-z])\^2\b` | \1 squared | `x^2` -> x squared |
 | `([A-Za-z])\^3\b` | \1 cubed | `x^3` -> x cubed |
 | `([A-Za-z])\^\{2\}` | \1 squared | `x^{2}` -> x squared |
 | `([A-Za-z])\^\{3\}` | \1 cubed | `x^{3}` -> x cubed |
-| `([A-Za-z])\^\{(-?\w+)\}` | \1 to the \2 | `x^{k}` -> x to the k |
-| `([A-Za-z])\^(-?\w+)` | \1 to the \2 | `x^k` -> x to the k |
+| `([A-Za-z])\^\{([A-Za-z0-9])\}` | \1 \2 | `x^{k}` -> x k (single char, 2/3 already handled) |
+| `([A-Za-z])\^([A-Za-z0-9])\b` | \1 \2 | `x^k` -> x k (single char, 2/3 already handled) |
+| `([A-Za-z])\^\{(-?\w+)\}` | \1 to the \2 | `x^{n+1}` -> x to the n+1 |
+| `([A-Za-z])\^(-?\w+)` | \1 to the \2 | `x^{long}` -> x to the long |
 | `(\d+(?:\.\d+)?)\^\{([^{}]+)\}` | \1 to the \2 | `1.8^{+1.0}` -> 1.8 to the +1.0 |
 | `(\d+(?:\.\d+)?)\^(-?\w+)` | \1 to the \2 | `1.8^2` -> 1.8 to the 2 |
 | `([A-Za-z])_\{([^{}]+)\}` | \1 sub \2 | `x_{i,j}` -> x sub i,j |
-| `([A-Za-z])_([A-Za-z0-9])` | \1 sub \2 | `x_i` -> x sub i |
+| `([A-Za-z])_([A-Za-z0-9])` | \1 \2 | `x_i` -> x i (single char; drop "sub") |
 | `\)_\{([^{}]+)\}` | ) sub \1 | `)_{C}` -> ) sub C |
 | `\)_([A-Za-z0-9])` | ) sub \1 | `)_C` -> ) sub C |
 | `_\{([^{}]+)\}` | sub \1 | `_{i,j}` -> sub i,j (fallback for non-ASCII leading char; glue fixed by literal table) |
@@ -550,11 +584,12 @@ names and identifiers like `2MASS`, `6dF`, or `3D` are left untouched.
 | `(\d)\s*%` | \1 percent | `5%` -> 5 percent |
 | `(\d)percent` | \1 percent | `80percent` -> 80 percent (glued) |
 | `(alpha\|beta\|gamma\|delta\|epsilon\|zeta\|eta\|theta\|kappa\|lambda\|mu\|nu\|xi\|pi\|rho\|sigma\|tau\|phi\|chi\|psi\|omega)sub\b` | \1 sub | `alphasub CO` -> alpha sub CO (space recovery after Unicode Greek subscript) |
-| `([A-Za-z0-9])\s*/\s*([A-Za-z])` | \1 per \2 | `solar masses/h` -> solar masses per h |
+| `([A-Za-z0-9])\s*/\s*([a-z])` | \1 per \2 | `solar masses/h` -> solar masses per h |
 | `([A-Za-z0-9])\s*<\s*([A-Za-z0-9])` | \1 less than \2 | `chi squared < 1` -> chi squared less than 1 |
 | `([A-Za-z0-9])\s*>\s*([A-Za-z0-9])` | \1 greater than \2 | `z > 2` -> z greater than 2 |
 | `([A-Za-z0-9])\s*=\s*([A-Za-z0-9])` | \1 equals \2 | `n = 3` -> n equals 3 |
 | `\\,` |  | `\,` (thin space) -> removed |
 | `\\;` |  | `\;` -> removed |
+| `([=:])\(` | \1 ( | `=(5+5)` -> `= (5+5)`, `:(` -> `: (` (prevents TTS reading as sad-face emoticon) |
 | `\^\*` | ` star` | `A^*` -> A star (e.g. Sgr A*) |
 | `\^` | ` to the power of ` | leftover `^` -> to the power of |

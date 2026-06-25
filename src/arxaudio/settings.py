@@ -34,6 +34,9 @@ _DEFAULTS: dict[str, object] = {
     "BENTY_BASE_URL": "https://www.benty-fields.com",
     "LLM_BACKEND": "ollama",
     "OLLAMA_MODEL": "qwen2.5:0.5b",
+    "OLLAMA_RANK_MODEL": "",
+    "OLLAMA_TIMEOUT": 120.0,
+    "OLLAMA_NUM_CTX": 8192,
     "TTS_BACKEND": "edge",
     "TTS_VOICE": "en-US-AndrewNeural",
     "TTS_SPEED": 1.0,
@@ -71,7 +74,10 @@ class Settings:
 
     # LLM
     llm_backend: str = "ollama"
-    ollama_model: str = "qwen2.5:0.5b"
+    ollama_model: str = "qwen2.5:0.5b"       # used for math-cleanup (process stage)
+    ollama_rank_model: str = ""               # used for ranking; falls back to ollama_model if empty
+    ollama_timeout: float = 120.0             # per-request timeout in seconds
+    ollama_num_ctx: int = 8192               # KV-cache context window in tokens
 
     # TTS
     tts_backend: str = "edge"
@@ -295,6 +301,9 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         categories=list(get("CATEGORIES")),           # type: ignore[arg-type]
         llm_backend=str(get("LLM_BACKEND")),
         ollama_model=str(get("OLLAMA_MODEL")),
+        ollama_rank_model=str(get("OLLAMA_RANK_MODEL")),
+        ollama_timeout=float(get("OLLAMA_TIMEOUT")),  # type: ignore[arg-type]
+        ollama_num_ctx=int(get("OLLAMA_NUM_CTX")),    # type: ignore[arg-type]
         tts_backend=str(get("TTS_BACKEND")),
         tts_voice=str(get("TTS_VOICE")),
         tts_speed=float(get("TTS_SPEED")),          # type: ignore[arg-type]
@@ -339,10 +348,12 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         )
 
     logger.info("Paper source: %s", settings.paper_source)
+    rank_model = settings.ollama_rank_model or settings.ollama_model
     logger.info(
-        "Settings loaded: %d categories, model=%s, voice=%s",
+        "Settings loaded: %d categories, model=%s, rank_model=%s, voice=%s",
         len(settings.categories),
         settings.ollama_model,
+        rank_model,
         settings.tts_voice,
     )
     return settings

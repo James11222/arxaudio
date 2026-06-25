@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import subprocess
 import time
 from pathlib import Path
 
@@ -90,7 +91,7 @@ class EdgeTTSBackend(TTSBackend):
         for attempt in range(1, self.max_attempts + 1):
             try:
                 asyncio.run(self._synthesize_async(text, voice, out_path))
-                self._validate_output(out_path)
+                self._validate_output(out_path, text)
                 logger.debug(
                     "edge-tts synthesized %d chars to %s (attempt %d)",
                     len(text),
@@ -127,9 +128,41 @@ class EdgeTTSBackend(TTSBackend):
         await communicate.save(str(out_path))
 
     @staticmethod
-    def _validate_output(out_path: Path) -> None:
-        """Raise ``TTSError`` unless ``out_path`` exists and is non-empty."""
+    def _validate_output(out_path: Path, text: str) -> None:
+        """Raise ``TTSError`` if ``out_path`` is missing, empty, or suspiciously short.
+
+        Checks that the audio duration is at least as long as it would take to
+        speak ``text`` at a very fast 25 chars/second. This catches partial files
+        produced when the edge-tts WebSocket closes before all audio is delivered.
+        """
         if not out_path.exists():
             raise TTSError(f"edge-tts produced no file at {out_path}")
         if out_path.stat().st_size == 0:
             raise TTSError(f"edge-tts produced an empty file at {out_path}")
+        min_expected_s = len(text) / 25.0
+        if min_expected_s > 1.0:
+            duration = EdgeTTSBackend._probe_duration(out_path)
+            if duration < min_expected_s:
+                raise TTSError(
+                    f"edge-tts audio too short ({duration:.1f}s) for {len(text)}-char "
+                    f"text (expected ≥{min_expected_s:.1f}s); likely a partial stream"
+                )
+
+    @staticmethod
+    def _probe_duration(path: Path) -> float:
+        """Return audio duration in seconds via ffprobe, or 0 on failure."""
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe", "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    str(path),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return float(result.stdout.strip())
+        except Exception:
+            return 0.0

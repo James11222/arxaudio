@@ -62,15 +62,22 @@ jobs:
 
       # Single source of truth: read OLLAMA_MODEL straight out of config.py so the
       # cache key and the pull below can never drift from the pipeline's config.
-      - name: Read model name from config.py
+      - name: Read model names from config.py
         id: model
         run: |
           MODEL=$(python -c "import importlib.util,sys; \
             spec=importlib.util.spec_from_file_location('cfg','config.py'); \
             m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); \
             print(getattr(m,'OLLAMA_MODEL','qwen2.5:0.5b'))")
+          RANK_MODEL=$(python -c "import importlib.util,sys; \
+            spec=importlib.util.spec_from_file_location('cfg','config.py'); \
+            m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); \
+            rank=getattr(m,'OLLAMA_RANK_MODEL',''); \
+            print(rank if rank else getattr(m,'OLLAMA_MODEL','qwen2.5:0.5b'))")
           echo "name=$MODEL" >> "$GITHUB_OUTPUT"
+          echo "rank_name=$RANK_MODEL" >> "$GITHUB_OUTPUT"
           echo "Configured ollama model: $MODEL"
+          echo "Configured ollama rank model: $RANK_MODEL"
 
       - name: Install ollama
         run: curl -fsSL https://ollama.com/install.sh | sh
@@ -85,7 +92,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.OLLAMA_MODELS }}
-          key: ollama-model-${{ steps.model.outputs.name }}-v2
+          key: ollama-model-${{ steps.model.outputs.name }}-${{ steps.model.outputs.rank_name }}-v2
 
       - name: Start ollama server
         run: |
@@ -110,15 +117,18 @@ jobs:
       # we skip the slow download. But if the cache was saved empty/partial (a
       # cancelled or failed earlier run), the hit would otherwise leave ollama
       # with no model — so we verify against `ollama list` and pull if missing.
-      - name: Ensure ollama model is present
+      - name: Ensure ollama models are present
         run: |
           MODEL="${{ steps.model.outputs.name }}"
-          if ollama list | awk 'NR>1 {print $1}' | grep -qx "$MODEL"; then
-            echo "Model $MODEL already present (cache hit); skipping pull."
-          else
-            echo "Model $MODEL not present; pulling."
-            ollama pull "$MODEL"
-          fi
+          RANK_MODEL="${{ steps.model.outputs.rank_name }}"
+          for M in "$MODEL" "$RANK_MODEL"; do
+            if ollama list | awk 'NR>1 {print $1}' | grep -qx "$M"; then
+              echo "Model $M already present (cache hit); skipping pull."
+            else
+              echo "Model $M not present; pulling."
+              ollama pull "$M"
+            fi
+          done
 
       - name: Run arxaudio pipeline
         env:
@@ -138,7 +148,7 @@ jobs:
           if [ "${{ github.event.inputs.skip_email }}" = "true" ]; then
             ARGS+=(--no-email)
           fi
-          python -m arxaudio.pipeline "${ARGS[@]}"
+          python -m arxaudio.pipeline --output-text "${ARGS[@]}"
 
       - name: Upload MP3 artifact
         if: always()
@@ -148,4 +158,13 @@ jobs:
           path: output/*.mp3
           retention-days: 14
           # Zero-paper days produce no MP3; that's normal, don't fail the upload.
+          if-no-files-found: ignore
+
+      - name: Upload text artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arxaudio-text
+          path: output/*.txt
+          retention-days: 14
           if-no-files-found: ignore

@@ -4,10 +4,11 @@ Runnable as a module::
 
     python -m arxaudio.pipeline                  # full daily run
     python -m arxaudio.pipeline --dry-run        # fetch+rank+process, no TTS/email
+    python -m arxaudio.pipeline --output-text    # also save processed text transcript
     python -m arxaudio.pipeline --no-email        # build the MP3 but don't send it
 
 Flow (see idea.md / PLAN.md):
-    load settings → read preferences.md → fetch the papers arXiv announced
+    load settings → read preferences.txt → fetch the papers arXiv announced
     today (daily RSS mailing) →
     rank all titles by relevance in ONE LLM call → top N (MAX_PAPERS) get
     LLM-clean math + TTS into one MP3, the next N are listed email-only →
@@ -54,9 +55,9 @@ from arxaudio.tts.edge_backend import EdgeTTSBackend
 logger = logging.getLogger("arxaudio")
 
 # Repo root: src/arxaudio/pipeline.py -> parents[2]. Used to locate the default
-# preferences.md and math_replacements.md regardless of the caller's CWD.
+# preferences.txt and math_replacements.md regardless of the caller's CWD.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_DEFAULT_PREFERENCES = _REPO_ROOT / "preferences.md"
+_DEFAULT_PREFERENCES = _REPO_ROOT / "preferences.txt"
 _DEFAULT_MATH_TABLE = _REPO_ROOT / "math_replacements.md"
 
 
@@ -74,7 +75,8 @@ _DEFAULT_MATH_TABLE = _REPO_ROOT / "math_replacements.md"
 # untouched because every stage depends only on the LLMBackend / TTSBackend ABCs.
 
 _LLM_REGISTRY: dict[str, "callable[[Settings], LLMBackend]"] = {
-    "ollama": lambda s: OllamaBackend(model=s.ollama_model),
+    "ollama": lambda s: OllamaBackend(model=s.ollama_model, timeout=s.ollama_timeout,
+                                      options={"num_ctx": s.ollama_num_ctx}),
 }
 
 
@@ -131,8 +133,61 @@ def make_tts(settings: Settings) -> "TTSBackend | DirectAudioBackend":
 # CLI
 # ---------------------------------------------------------------------------
 
-def _default_output() -> Path:
-    return Path("output") / f"arxaudio_{date.today().isoformat()}.mp3"
+def _default_output(run_date: date) -> Path:
+    return Path("output") / f"arxaudio_{run_date.isoformat()}.mp3"
+
+
+def _default_text_output(run_date: date) -> Path:
+    return Path("output") / f"arxaudio_{run_date.isoformat()}.txt"
+
+
+def _default_rank_output(run_date: date) -> Path:
+    return Path("output") / f"arxaudio_rank_{run_date.isoformat()}.txt"
+
+
+def _save_rank_file(
+    ranked: list[Paper],
+    kept: list[Paper],
+    extras: list[Paper],
+    path: Path,
+    run_date: date,
+    system_prompt: str = "",
+    user_prompt: str = "",
+    raw_reply: str = "",
+) -> None:
+    kept_ids = {p.arxiv_id for p in kept}
+    extra_ids = {p.arxiv_id for p in extras}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        f.write(f"arxaudio rank log — {run_date.isoformat()}\n")
+        f.write(f"{len(ranked)} papers ranked, {len(kept)} audio, {len(extras)} email-only\n\n")
+        if system_prompt:
+            f.write("=== SYSTEM PROMPT ===\n")
+            f.write(system_prompt.strip())
+            f.write("\n\n")
+        if user_prompt:
+            f.write("=== USER PROMPT ===\n")
+            f.write(user_prompt.strip())
+            f.write("\n\n")
+        if raw_reply:
+            f.write("=== RAW REPLY ===\n")
+            f.write(raw_reply.strip())
+            f.write("\n\n")
+        f.write("=== RANKING ===\n")
+        for i, paper in enumerate(ranked, start=1):
+            if paper.arxiv_id in kept_ids:
+                label = "AUDIO"
+            elif paper.arxiv_id in extra_ids:
+                label = "EMAIL-ONLY"
+            else:
+                label = "UNSELECTED"
+            score = (
+                f"{paper.relevance_score:4.1f}/10"
+                if paper.relevance_score is not None
+                else "    ?/10"
+            )
+            f.write(f"{i:>3}. {score} [{label:<10}] {paper.arxiv_id}  {paper.title}\n")
+    logger.info("Rank log saved to %s", path)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -154,13 +209,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--preferences",
         metavar="PATH",
         default=None,
-        help="Path to preferences.md (default: repo-root preferences.md).",
+        help="Path to preferences.txt (default: repo-root preferences.txt).",
     )
     p.add_argument(
         "--output",
         metavar="PATH",
         default=None,
         help="Output MP3 path (default: ./output/arxaudio_YYYY-MM-DD.mp3).",
+    )
+    p.add_argument(
+        "--date",
+        metavar="YYYY-MM-DD",
+        default=None,
+        help=(
+            "Fetch papers submitted on this date via the arXiv search API "
+            "instead of today's RSS feed. Useful for testing. "
+            "Note: submission date ≠ announcement date (papers are typically "
+            "announced the next business day)."
+        ),
     )
     p.add_argument(
         "--verbose",
@@ -202,6 +268,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "the email-only extras, then exit. No TTS, no email."
         ),
     )
+    p.add_argument(
+        "--output-text",
+        metavar="PATH",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "Save the processed text transcript to a file. "
+            "Defaults to ./output/arxaudio_YYYY-MM-DD.txt when no path is given."
+        ),
+    )
+    p.add_argument(
+        "--send-email",
+        metavar="MP3",
+        default=None,
+        help=(
+            "Skip the full pipeline and send an email with the given MP3 attached. "
+            "Useful for testing SMTP configuration. Paper lists will be empty."
+        ),
+    )
     return p
 
 
@@ -224,7 +310,7 @@ def _read_preferences(path: Path) -> str:
         # A missing preferences file is a systemic/config error: fail fast.
         raise RuntimeError(
             f"Could not read preferences file {path}: {exc}. "
-            "Create a preferences.md describing your research interests "
+            "Create a preferences.txt describing your research interests "
             "(or pass --preferences PATH)."
         ) from exc
 
@@ -287,12 +373,42 @@ def run(args: argparse.Namespace) -> int:
         settings.max_papers = args.max_papers
         logger.info("Override: max_papers=%d", settings.max_papers)
 
+    # --- Quick email test (--send-email) --------------------------------
+    if args.send_email is not None:
+        mp3 = Path(args.send_email)
+        if not mp3.exists():
+            logger.error("--send-email: file not found: %s", mp3)
+            return 1
+        if not settings.smtp_configured:
+            logger.error(
+                "--send-email: SMTP not configured. "
+                "Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD."
+            )
+            return 1
+        logger.info("Sending test email with %s ...", mp3)
+        try:
+            emailer.send_digest(settings, mp3, audio_papers=[], extra_papers=[])
+        except Exception as exc:
+            logger.error("Failed to send email: %s", exc)
+            return 1
+        logger.info("Test email sent to %s.", settings.effective_email_to)
+        return 0
+
+    try:
+        run_date = date.fromisoformat(args.date) if args.date else date.today()
+    except ValueError:
+        logger.error("--date %r is not a valid YYYY-MM-DD date.", args.date)
+        return 1
+
     preferences_path = (
         Path(args.preferences) if args.preferences else _DEFAULT_PREFERENCES
     )
     preferences = _read_preferences(preferences_path)
 
-    output_path = Path(args.output) if args.output else _default_output()
+    output_path = Path(args.output) if args.output else _default_output(run_date)
+    text_path: Path | None = None
+    if args.output_text is not None:
+        text_path = Path(args.output_text) if args.output_text else _default_text_output(run_date)
 
     benty_mode = settings.paper_source == "benty"
     notebooklm_mode = settings.tts_backend == "notebooklm"
@@ -321,6 +437,8 @@ def run(args: argparse.Namespace) -> int:
             "Source: benty-fields (papers come pre-ranked by your account's ML model)."
         )
         papers = benty.fetch_benty_papers(settings)
+    elif args.date:
+        papers = fetch.fetch_papers_for_date(settings.categories, run_date)
     else:
         papers = fetch.fetch_announced_papers(settings.categories)
     if not papers:
@@ -329,7 +447,8 @@ def run(args: argparse.Namespace) -> int:
     logger.info("Fetched %d papers.", len(papers))
 
     # --- LLM backend + health check (fail fast) -------------------------
-    llm: LLMBackend | None = None
+    llm: LLMBackend | None = None       # math-cleanup (process stage)
+    llm_rank: LLMBackend | None = None  # relevance ranking
     if needs_llm:
         llm = make_llm(settings)
         ensure = getattr(llm, "ensure_model", None)
@@ -339,6 +458,20 @@ def run(args: argparse.Namespace) -> int:
             except LLMError as exc:
                 logger.error("LLM backend health check failed: %s", exc)
                 return 1
+
+        if settings.ollama_rank_model:
+            llm_rank = OllamaBackend(model=settings.ollama_rank_model, timeout=settings.ollama_timeout,
+                                     options={"num_ctx": settings.ollama_num_ctx})
+            logger.info("Rank model: %s (process model: %s)", settings.ollama_rank_model, settings.ollama_model)
+            ensure_rank = getattr(llm_rank, "ensure_model", None)
+            if callable(ensure_rank):
+                try:
+                    ensure_rank()
+                except LLMError as exc:
+                    logger.error("Rank LLM backend health check failed: %s", exc)
+                    return 1
+        else:
+            llm_rank = llm
 
     # --- Rank -----------------------------------------------------------
     # One LLM call orders all titles by relevance. We skip it (and use feed
@@ -350,6 +483,9 @@ def run(args: argparse.Namespace) -> int:
     # When MAX_PAPERS == 0 (unlimited) we still rank, so audio order reflects
     # relevance, unless --no-rank says otherwise.
     n = settings.max_papers
+    raw_rank_reply = ""
+    raw_rank_system = ""
+    raw_rank_prompt = ""
     if benty_mode:
         # benty already returned papers in its ML-ranked order; that order IS
         # the ranking, so the LLM rank step is skipped entirely (--no-rank is
@@ -363,11 +499,13 @@ def run(args: argparse.Namespace) -> int:
             reason = "--no-rank" if args.no_rank else f"fetched <= MAX_PAPERS={n}"
             logger.info("Ranking skipped (%s): using arrival order.", reason)
         else:
-            assert llm is not None
-            ranked = rank_stage.rank_papers(papers, llm, preferences)
+            assert llm_rank is not None
+            ranked, raw_rank_system, raw_rank_prompt, raw_rank_reply = rank_stage.rank_papers(papers, llm_rank, preferences)
 
     # --- Split into audio papers + email-only extras --------------------
     kept, extras = _split_ranked(ranked, n)
+
+    _save_rank_file(ranked, kept, extras, _default_rank_output(run_date), run_date, raw_rank_system, raw_rank_prompt, raw_rank_reply)
 
     if not kept:
         logger.info("No papers to synthesize today.")
@@ -395,6 +533,30 @@ def run(args: argparse.Namespace) -> int:
         assert llm is not None
         process.process_papers(kept, llm)
 
+    # --- Text transcript ------------------------------------------------
+    if text_path is not None:
+        text_path.parent.mkdir(parents=True, exist_ok=True)
+        with text_path.open("w", encoding="utf-8") as f:
+            f.write(f"arxaudio digest — {run_date.isoformat()}\n")
+            f.write(f"{len(kept)} audio papers, {len(extras)} email-only\n\n")
+            for i, paper in enumerate(kept, start=1):
+                byline = paper.first_author + (
+                    " et al" if len(paper.authors) > 1 else ""
+                )
+                abstract = paper.clean_abstract or paper.abstract
+                f.write(f"[{i}/{len(kept)}] {paper.arxiv_id}\n")
+                f.write(f"TITLE:    {paper.clean_title or paper.title}\n")
+                f.write(f"AUTHOR:   {byline}\n")
+                f.write(f"ABSTRACT: {abstract}\n\n")
+            if extras:
+                f.write(f"Email-only ({len(extras)} papers):\n")
+                for i, paper in enumerate(extras, start=1):
+                    byline = paper.first_author + (
+                        " et al" if len(paper.authors) > 1 else ""
+                    )
+                    f.write(f"  {i}. {paper.title} — {byline} — {paper.url}\n")
+        logger.info("Text transcript saved to %s", text_path)
+
     # --- Dry run stops here ---------------------------------------------
     if args.dry_run:
         logger.info("Dry run — the following %d papers would be synthesized:", len(kept))
@@ -417,7 +579,7 @@ def run(args: argparse.Namespace) -> int:
 
     # --- TTS / audio ----------------------------------------------------
     tts = make_tts(settings)
-    today_human = date.today().strftime("%B %-d, %Y")
+    today_human = run_date.strftime("%B %-d, %Y")
 
     if isinstance(tts, DirectAudioBackend):
         # Batch backends (e.g. notebookLM) generate a single audio file for

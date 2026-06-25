@@ -30,7 +30,7 @@
 # PAPER_SOURCE controls where daily papers come from:
 #
 #   "arxiv"  (default) — fetch from arXiv RSS feeds for the CATEGORIES below,
-#            then rank with the local LLM using your preferences.md.
+#            then rank with the local LLM using your preferences.txt.
 #            No additional credentials needed.
 #
 #   "benty"  — fetch the day's papers already ML-ranked from your personal
@@ -43,7 +43,7 @@
 #                               password not reused elsewhere)
 #            Optionally set BENTY_BASE_URL to override the default base URL.
 
-PAPER_SOURCE: str = "benty"  # "arxiv" or "benty"
+PAPER_SOURCE: str = "arxiv"  # "arxiv" or "benty"
 
 
 # ---------------------------------------------------------------------------
@@ -68,11 +68,33 @@ CATEGORIES: list[str] = [
 
 LLM_BACKEND: str = "ollama"
 
-# OLLAMA_MODEL: the model pulled by `ollama pull <model>`.
-# qwen2.5:0.5b is tiny (~400 MB) and fast enough for title ranking decisions.
+# OLLAMA_MODEL: the model used for math-cleanup (process stage).
+# qwen2.5:0.5b is tiny (~400 MB) and fast enough for the mechanical task of
+# converting LaTeX notation to spoken English.
 # Larger options:  "qwen2.5:1.5b", "qwen2.5:3b", "llama3.2:1b"
 
-OLLAMA_MODEL: str = "qwen2.5:1.5b"
+OLLAMA_MODEL: str = "qwen2.5:0.5b"
+
+# OLLAMA_RANK_MODEL: model used for the relevance-ranking stage only.
+# Leave empty to use OLLAMA_MODEL for both stages.
+# Ranking requires genuine topic comprehension (distinguishing adjacent fields,
+# honouring the exclusion list) so a larger model pays off here.
+# The rank stage makes only ONE LLM call per run, so a bigger model is cheap.
+# Example:  "qwen2.5:3b", "qwen3:4b"
+
+OLLAMA_RANK_MODEL: str = "qwen2.5:7b"
+
+# OLLAMA_TIMEOUT: per-request timeout in seconds for ollama API calls.
+# Increase if ranking or cleanup times out on slow hardware or large models.
+
+OLLAMA_TIMEOUT: float = 3000.0
+
+# OLLAMA_NUM_CTX: KV-cache context window in tokens (input + output combined).
+# For non-thinking models 8192 is sufficient. Thinking models (qwen3, etc.)
+# generate a <think>…</think> chain before answering; with 40+ papers that
+# chain can exceed 10 000 tokens, so 32768 is a safe default for them.
+
+OLLAMA_NUM_CTX: int = 16384
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +111,7 @@ TTS_BACKEND: str = "edge"
 # Good English neural voices:  en-US-AndrewNeural, en-US-JennyNeural,
 #                               en-GB-RyanNeural, en-AU-NatashaNeural
 
-TTS_VOICE: str = "en-US-AndrewNeural"
+TTS_VOICE: str = "en-GB-RyanNeural"
 
 # TTS_SPEED: narration speed multiplier relative to the voice's normal pace.
 #   1.0  = normal,  0.8 = slower,  1.2 / 1.5 = faster,  2.0 = double speed.
@@ -174,7 +196,7 @@ PAUSE_SECONDS: float = 1.2
 #     there is no email-only listing section.
 # Useful if you subscribe to very active categories and want a shorter digest.
 
-MAX_PAPERS: int = 20
+MAX_PAPERS: int = 10
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +215,7 @@ MAX_PAPERS: int = 20
 # The pipeline appends the date and paper count automatically, e.g.:
 #   "ArXaudio Digest — 2026-06-11 (7 papers)"
 
-EMAIL_SUBJECT_PREFIX: str = "ArXaudio Digest"
+EMAIL_SUBJECT_PREFIX: str = "arXaudio Digest"
 
 
 # ---------------------------------------------------------------------------
@@ -202,4 +224,4 @@ EMAIL_SUBJECT_PREFIX: str = "ArXaudio Digest"
 # REPO_URL: shown in the email footer ("Sent by arxaudio").  When you fork
 # this project, point it at YOUR fork so the link in your digest is correct.
 
-REPO_URL: str = "https://github.com/James11222/arxaudio"
+REPO_URL: str = "https://github.com/ShrihanSolo/arxaudio/tree/shrihan"

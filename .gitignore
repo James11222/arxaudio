@@ -6,8 +6,8 @@ build/
 dist/
 
 # pipeline output
-output/
 *.mp3
+output/*.txt
 
 # local env
 .venv/

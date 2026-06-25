@@ -34,9 +34,76 @@ logger = logging.getLogger(__name__)
 # src/arxaudio/process.py -> repo root).
 _DEFAULT_TABLE_PATH = Path(__file__).resolve().parents[2] / "math_replacements.md"
 
+# ---------------------------------------------------------------------------
+# LaTeX accent decoder for author names
+# ---------------------------------------------------------------------------
+
+_LATEX_ACCENT_MAP: dict[str, dict[str, str]] = {
+    "'": {"a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú", "y": "ý",
+          "A": "Á", "E": "É", "I": "Í", "O": "Ó", "U": "Ú", "Y": "Ý",
+          "c": "ć", "n": "ń", "s": "ś", "z": "ź",
+          "C": "Ć", "N": "Ń", "S": "Ś", "Z": "Ź"},
+    "`": {"a": "à", "e": "è", "i": "ì", "o": "ò", "u": "ù",
+          "A": "À", "E": "È", "I": "Ì", "O": "Ò", "U": "Ù"},
+    '"': {"a": "ä", "e": "ë", "i": "ï", "o": "ö", "u": "ü", "y": "ÿ",
+          "A": "Ä", "E": "Ë", "I": "Ï", "O": "Ö", "U": "Ü"},
+    "^": {"a": "â", "e": "ê", "i": "î", "o": "ô", "u": "û",
+          "A": "Â", "E": "Ê", "I": "Î", "O": "Ô", "U": "Û"},
+    "~": {"a": "ã", "n": "ñ", "o": "õ", "A": "Ã", "N": "Ñ", "O": "Õ"},
+    "c": {"c": "ç", "C": "Ç", "s": "ş", "S": "Ş"},
+    "v": {"c": "č", "s": "š", "z": "ž", "r": "ř", "n": "ň",
+          "C": "Č", "S": "Š", "Z": "Ž", "R": "Ř", "N": "Ň"},
+    "r": {"a": "å", "A": "Å"},
+    ".": {"z": "ż", "Z": "Ż"},
+    "=": {"a": "ā", "e": "ē", "i": "ī", "o": "ō", "u": "ū",
+          "A": "Ā", "E": "Ē", "I": "Ī", "O": "Ō", "U": "Ū"},
+    "u": {"a": "ă", "A": "Ă"},
+    "H": {"o": "ő", "u": "ű", "O": "Ő", "U": "Ű"},
+    "k": {"a": "ą", "e": "ę", "A": "Ą", "E": "Ę"},
+}
+
+_LATEX_STANDALONE: dict[str, str] = {
+    r"\ss": "ß", r"\ae": "æ", r"\AE": "Æ", r"\oe": "œ", r"\OE": "Œ",
+    r"\aa": "å", r"\AA": "Å", r"\o": "ø", r"\O": "Ø",
+    r"\l": "ł", r"\L": "Ł", r"\i": "ı", r"\j": "ȷ",
+}
+
+# Accent command characters (single-char punctuation and single-letter commands).
+_ACCENT_CMD_CHARS = r"""'`"^~=.rvuHkc"""
+
+# Matches all braced/unbraced forms: {\' a}, {\'a}, \'{a}, \'a, {\c{c}}, \c{c}, \ca
+_ACCENT_RE = re.compile(
+    r'\{?\\([' + re.escape(_ACCENT_CMD_CHARS) + r'])\s*\{([a-zA-Z])\}\}?'  # \cmd{L} or {\cmd{L}}
+    r'|'
+    r'\{\\([' + re.escape(_ACCENT_CMD_CHARS) + r'])\s*([a-zA-Z])\}'         # {\cmd L}
+    r'|'
+    r'\\([' + re.escape(_ACCENT_CMD_CHARS) + r'])([a-zA-Z])'                # \cmdL (bare)
+)
+
+
+def _accent_sub(m: re.Match[str]) -> str:
+    # Three alternation groups; pick whichever matched.
+    cmd = m.group(1) or m.group(3) or m.group(5)
+    letter = m.group(2) or m.group(4) or m.group(6)
+    return _LATEX_ACCENT_MAP.get(cmd, {}).get(letter, letter)
+
+
+def decode_latex_name(name: str) -> str:
+    """Decode LaTeX accent commands in an author name to Unicode.
+
+    Handles common forms: S\\'anchez, {\\'a}, \\'{a}, \\c{c}, etc.
+    """
+    # Standalone symbol commands first (order matters: \aa before \a).
+    for cmd, replacement in _LATEX_STANDALONE.items():
+        name = name.replace(cmd, replacement)
+    name = _ACCENT_RE.sub(_accent_sub, name)
+    # Strip any remaining braces left over from LaTeX grouping.
+    name = name.replace("{", "").replace("}", "")
+    return name
+
 # How far the LLM output may differ from the regex-pass length before we reject
-# it as paraphrasing/chatter. 0.20 == 20%.
-_LENGTH_TOLERANCE = 0.20
+# it as paraphrasing/chatter. 0.12 == 12% (~180 chars on a 1500-char abstract).
+_LENGTH_TOLERANCE = 0.12
 
 # A correct spoken-text polish contains NO math delimiters — the deterministic
 # pass already stripped every ``$``, brace, and hard-to-pronounce command. A

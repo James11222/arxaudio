@@ -37,11 +37,13 @@ import re
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+import xml.etree.ElementTree as ET
+from datetime import date, datetime, timezone
 
 import feedparser
 
 from arxaudio.models import Paper
+from arxaudio.process import decode_latex_name
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +52,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _FEED_URL = "https://rss.arxiv.org/rss/{category}"
+_API_URL = "https://export.arxiv.org/api/query"
 _USER_AGENT = "arxaudio/0.1 (https://github.com/jsunseri/arxaudio; educational use)"
 _INTER_REQUEST_DELAY = 3  # seconds between feed requests (arXiv ToS)
 _MAX_RETRIES = 2
 _RETRY_BACKOFF = 5        # seconds between retries
+_API_MAX_RESULTS = 200    # per-category cap when querying by date
 
 # Announce types that count as "a paper that appeared today".
 _KEEP_ANNOUNCE_TYPES = {"new", "cross"}
@@ -178,7 +182,7 @@ def _parse_authors(entry: object) -> list[str]:
     for raw in raw_authors:
         name = raw.get("name", "") or ""
         for part in name.split(","):
-            part = _normalise_whitespace(part)
+            part = decode_latex_name(_normalise_whitespace(part))
             if part:
                 authors.append(part)
     return authors
@@ -302,6 +306,134 @@ def fetch_announced_papers(categories: list[str]) -> list[Paper]:
             len(entries),
             cat_new,
             skipped_replacements,
+        )
+
+    papers = list(seen.values())
+    logger.info(
+        "Total after de-duplication across %d categories: %d papers.",
+        len(categories),
+        len(papers),
+    )
+    return papers
+
+
+# ---------------------------------------------------------------------------
+# Date-specific fetch (arXiv search API, for testing / past dates)
+# ---------------------------------------------------------------------------
+
+_ATOM_NS = "http://www.w3.org/2005/Atom"
+_ARXIV_NS = "http://arxiv.org/schemas/atom"
+
+
+def _parse_atom_entry(elem: ET.Element) -> Paper | None:
+    """Convert one Atom <entry> element from the arXiv API to a Paper."""
+    try:
+        def tag(ns: str, name: str) -> str:
+            return f"{{{ns}}}{name}"
+
+        raw_id = (elem.findtext(tag(_ATOM_NS, "id")) or "").strip()
+        arxiv_id = _parse_arxiv_id(raw_id)
+        if not arxiv_id:
+            return None
+
+        title = _normalise_whitespace(elem.findtext(tag(_ATOM_NS, "title")) or "")
+        abstract = _normalise_whitespace(elem.findtext(tag(_ATOM_NS, "summary")) or "")
+        published = (elem.findtext(tag(_ATOM_NS, "published")) or "").strip()
+
+        authors: list[str] = [
+            _normalise_whitespace(a.findtext(tag(_ATOM_NS, "name")) or "")
+            for a in elem.findall(tag(_ATOM_NS, "author"))
+            if a.findtext(tag(_ATOM_NS, "name"))
+        ]
+
+        categories: list[str] = [
+            c.get("term", "")
+            for c in elem.findall(tag(_ATOM_NS, "category"))
+            if c.get("term")
+        ]
+
+        return Paper(
+            arxiv_id=arxiv_id,
+            title=title,
+            abstract=abstract,
+            authors=authors,
+            categories=categories,
+            published=published,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to parse API entry: %s", exc)
+        return None
+
+
+def fetch_papers_for_date(categories: list[str], target_date: date) -> list[Paper]:
+    """Fetch papers submitted on *target_date* using the arXiv search API.
+
+    Uses submission date, not announcement date — papers submitted on day X
+    are typically announced on day X+1 (next business day). This is intended
+    for testing and back-filling, not the live daily pipeline.
+
+    Parameters
+    ----------
+    categories:
+        List of arXiv category strings, e.g. ``["astro-ph.CO", "astro-ph.GA"]``.
+    target_date:
+        The submission date to query.
+
+    Returns
+    -------
+    list[Paper]
+        De-duplicated papers (by ``arxiv_id``) across all categories.
+    """
+    if not categories:
+        raise ValueError("categories must be a non-empty list.")
+
+    date_str = target_date.strftime("%Y%m%d")
+    date_range = f"[{date_str}0000+TO+{date_str}2359]"
+
+    logger.info(
+        "Fetching arXiv papers submitted on %s for %d categories (API mode).",
+        target_date.isoformat(),
+        len(categories),
+    )
+
+    seen: dict[str, Paper] = {}
+
+    for i, category in enumerate(categories):
+        if i > 0:
+            time.sleep(_INTER_REQUEST_DELAY)
+
+        query = f"cat:{category}+AND+submittedDate:{date_range}"
+        url = (
+            f"{_API_URL}?search_query={query}"
+            f"&max_results={_API_MAX_RESULTS}"
+            f"&sortBy=submittedDate&sortOrder=descending"
+        )
+        logger.debug("Querying arXiv API: %s", url)
+
+        raw = _fetch_url(url)
+
+        try:
+            root = ET.fromstring(raw)
+        except ET.ParseError as exc:
+            raise RuntimeError(
+                f"arXiv API returned unparseable XML for category {category!r}: {exc}"
+            ) from exc
+
+        entries = root.findall(f"{{{_ATOM_NS}}}entry")
+        cat_new = 0
+        for elem in entries:
+            paper = _parse_atom_entry(elem)
+            if paper is None:
+                continue
+            if paper.arxiv_id not in seen:
+                seen[paper.arxiv_id] = paper
+                cat_new += 1
+
+        logger.info(
+            "Category %s: %d papers submitted on %s.",
+            category,
+            cat_new,
+            target_date.isoformat(),
         )
 
     papers = list(seen.values())

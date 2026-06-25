@@ -7,7 +7,7 @@ import pytest
 
 from arxaudio.llm.base import LLMError
 from arxaudio.models import Paper
-from arxaudio.process import apply_replacements, clean_paper, process_papers
+from arxaudio.process import apply_replacements, clean_paper, decode_latex_name, process_papers
 
 from conftest import FakeLLM
 
@@ -677,6 +677,29 @@ def test_process_papers_skip_keep_none():
     process_papers([paper], llm)
     assert paper.clean_title == ""
     assert paper.clean_abstract == ""
+
+
+# ---------------------------------------------------------------------------
+# decode_latex_name
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("raw,expected", [
+    ("S\\'anchez",       "Sánchez"),   # bare: \'letter
+    ("S\\'{a}nchez",    "Sánchez"),   # braced letter: \'{a}
+    ("{\\'a}",          "á"),          # outer braces: {\'a}
+    ("{\\'  a}",        "á"),          # outer braces with space
+    ("{\\\"O}berseder", "Öberseder"), # umlaut: {\"O}
+    ("\\c{c}",          "ç"),          # cedilla
+    ("\\v{S}",          "Š"),          # caron
+    ("\\ss",            "ß"),          # standalone commands
+    ("\\ae",            "æ"),
+    ("\\l",             "ł"),
+    ("\\o",             "ø"),
+    ("Alice Smith",     "Alice Smith"), # plain ASCII unchanged
+    ("",                ""),
+])
+def test_decode_latex_name(raw, expected):
+    assert decode_latex_name(raw) == expected
 
 
 def test_process_papers_skip_keep_false():
