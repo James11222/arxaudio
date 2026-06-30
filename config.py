@@ -72,7 +72,7 @@ LLM_BACKEND: str = "ollama"
 # qwen2.5:0.5b is tiny (~400 MB) and fast enough for title ranking decisions.
 # Larger options:  "qwen2.5:1.5b", "qwen2.5:3b", "llama3.2:1b"
 
-OLLAMA_MODEL: str = "qwen2.5:1.5b"
+OLLAMA_MODEL: str = "qwen2.5:7b"
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ PAUSE_SECONDS: float = 1.2
 #     there is no email-only listing section.
 # Useful if you subscribe to very active categories and want a shorter digest.
 
-MAX_PAPERS: int = 20
+MAX_PAPERS: int = 15
 
 
 # ---------------------------------------------------------------------------
