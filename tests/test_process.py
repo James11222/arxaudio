@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import re
 
 import pytest
 
@@ -824,6 +825,36 @@ def test_paraphrase_strips_lead_in_echo():
     llm = FakeLLM(responses=[echoed])
     result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=3, arxiv_id="test")
     assert result == clean
+
+
+def test_paraphrase_level2_latex_in_output_is_cleaned():
+    """LLM paraphrase that reintroduces LaTeX has it cleaned by apply_replacements."""
+    # Simulate a model that echoes back LaTeX notation like \sigma_8, \alpha
+    latex_paraphrase = (
+        "Using Year-1 LSST data the authors measure the matter power spectrum "
+        "and constrain \\sigma_8 and \\Omega_m consistent with Planck 2018. "
+        "The \\Lambda CDM model is supported."
+    )
+    llm = FakeLLM(responses=[latex_paraphrase])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=2, arxiv_id="test")
+    # No backslash commands should remain in the output
+    assert not re.search(r"\\[A-Za-z]", result), f"LaTeX commands remain: {result!r}"
+    # The content should still be present in cleaned form
+    assert "sigma" in result.lower()
+    assert "Planck 2018" in result
+
+
+def test_paraphrase_level3_latex_in_output_is_cleaned():
+    """Level-3 paraphrase output with LaTeX is cleaned via apply_replacements."""
+    latex_digest = (
+        "This paper measures the matter power spectrum with LSST weak lensing. "
+        "Tight constraints on \\sigma_8 and \\Omega_m are obtained, "
+        "consistent with Planck 2018."
+    )
+    llm = FakeLLM(responses=[latex_digest])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=3, arxiv_id="test")
+    assert not re.search(r"\\[A-Za-z]", result), f"LaTeX commands remain: {result!r}"
+    assert "sigma" in result.lower()
 
 
 def test_process_papers_paraphrase_level2(paper_co):

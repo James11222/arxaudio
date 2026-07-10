@@ -556,6 +556,9 @@ RULES — follow exactly:
 - Replace specific numbers and equations only when doing so makes the text
   clearer to an audio listener. E.g. "sigma_8 = 0.82 ± 0.03" can become
   "a tight constraint on the clustering amplitude".
+- Do NOT use LaTeX notation of any kind: no backslashes, no \\alpha or \\sigma,
+  no dollar signs, no ^{...} or _{...}. Write all quantities in plain English
+  words (e.g. write "sigma eight" not "\\sigma_8", "omega matter" not "\\Omega_m").
 - Output ONLY the rewritten abstract, nothing else.
 - If in doubt, keep the original wording."""
 
@@ -581,6 +584,9 @@ RULES — follow exactly:
   or a specific direction, preserve that.
 - Keep field-specific terminology and proper names (telescopes, surveys,
   simulations, etc.) as-is.
+- Do NOT use LaTeX notation of any kind: no backslashes, no \\alpha or \\sigma,
+  no dollar signs, no ^{...} or _{...}. Write all quantities in plain English
+  words (e.g. write "sigma eight" not "\\sigma_8", "omega matter" not "\\Omega_m").
 - Output ONLY the spoken summary, nothing else. Aim for 3–6 sentences."""
 
 # Guard: paraphrase output must be at least this fraction of the original
@@ -663,11 +669,15 @@ def paraphrase_abstract(
             break
 
     if _validate_paraphrase(stripped, text, level):
+        # Run the regex/literal cleanup pass on the paraphrase output to remove
+        # any LaTeX notation (backslash commands, dollar signs, braces) that the
+        # LLM may have (re-)introduced, so TTS never reads "backslash alpha" etc.
+        final = apply_replacements(stripped)
         logger.info(
             "process: paraphrased %s at level %d (%.0f%% of original length)",
-            arxiv_id, level, 100 * len(stripped) / max(len(text), 1),
+            arxiv_id, level, 100 * len(final) / max(len(text), 1),
         )
-        return stripped
+        return final
 
     logger.warning(
         "process: paraphrase output for %s (level %d) failed validation "
