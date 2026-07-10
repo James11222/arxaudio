@@ -75,10 +75,10 @@ class Settings:
 
     # LLM
     llm_backend: str = "ollama"
-    ollama_model: str = "qwen2.5:0.5b"       # used for math-cleanup (process stage)
-    ollama_rank_model: str = ""               # used for ranking; falls back to ollama_model if empty
-    ollama_timeout: float = 120.0             # per-request timeout in seconds
-    ollama_num_ctx: int = 8192               # KV-cache context window in tokens
+    ollama_model: str = "qwen2.5:0.5b"  # used for math-cleanup (process stage)
+    ollama_rank_model: str = ""         # used for ranking; falls back to ollama_model if empty
+    ollama_timeout: float = 120.0       # per-request timeout in seconds
+    ollama_num_ctx: int = 8192          # KV-cache context window in tokens
 
     # TTS
     tts_backend: str = "edge"

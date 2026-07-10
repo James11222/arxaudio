@@ -78,7 +78,7 @@ OLLAMA_MODEL: str = "qwen2.5:7b"
 # Set to a different model if you want a separate (possibly larger) model for
 # ranking papers.  Example: "qwen2.5:14b"
 
-# OLLAMA_RANK_MODEL: str = ""
+OLLAMA_RANK_MODEL = ""
 
 
 # ---------------------------------------------------------------------------

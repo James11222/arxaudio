@@ -394,7 +394,7 @@ def run(args: argparse.Namespace) -> int:
     logger.info("Fetched %d papers.", len(papers))
 
     # --- LLM backend + health check (fail fast) -------------------------
-    llm: LLMBackend | None = None       # math-cleanup (process stage)
+    llm: LLMBackend | None = None      # math-cleanup (process stage)
     llm_rank: LLMBackend | None = None  # relevance ranking
     if needs_llm:
         llm = make_llm(settings)
@@ -446,7 +446,9 @@ def run(args: argparse.Namespace) -> int:
             logger.info("Ranking skipped (%s): using arrival order.", reason)
         else:
             assert llm_rank is not None
-            ranked, raw_rank_system, raw_rank_prompt, raw_rank_reply = rank_stage.rank_papers(papers, llm_rank, preferences)
+            ranked, raw_rank_system, raw_rank_prompt, raw_rank_reply = (
+                rank_stage.rank_papers(papers, llm_rank, preferences)
+            )
 
     # --- Split into audio papers + email-only extras --------------------
     kept, extras = _split_ranked(ranked, n)
