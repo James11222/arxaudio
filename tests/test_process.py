@@ -837,8 +837,10 @@ def test_paraphrase_level2_latex_in_output_is_cleaned():
     )
     llm = FakeLLM(responses=[latex_paraphrase])
     result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=2, arxiv_id="test")
-    # No backslash commands should remain in the output
-    assert not re.search(r"\\[A-Za-z]", result), f"LaTeX commands remain: {result!r}"
+    # No backslash commands, dollar signs, or braces should remain in the output
+    assert not re.search(r"\\[A-Za-z]|\$|\{|\}", result), (
+        f"LaTeX markers remain: {result!r}"
+    )
     # The content should still be present in cleaned form
     assert "sigma" in result.lower()
     assert "Planck 2018" in result
@@ -853,7 +855,9 @@ def test_paraphrase_level3_latex_in_output_is_cleaned():
     )
     llm = FakeLLM(responses=[latex_digest])
     result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=3, arxiv_id="test")
-    assert not re.search(r"\\[A-Za-z]", result), f"LaTeX commands remain: {result!r}"
+    assert not re.search(r"\\[A-Za-z]|\$|\{|\}", result), (
+        f"LaTeX markers remain: {result!r}"
+    )
     assert "sigma" in result.lower()
 
 
