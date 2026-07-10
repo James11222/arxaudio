@@ -68,11 +68,41 @@ CATEGORIES: list[str] = [
 
 LLM_BACKEND: str = "ollama"
 
-# OLLAMA_MODEL: the model pulled by `ollama pull <model>`.
-# qwen2.5:0.5b is tiny (~400 MB) and fast enough for title ranking decisions.
-# Larger options:  "qwen2.5:1.5b", "qwen2.5:3b", "llama3.2:1b"
+# OLLAMA_MODEL: the model used for the math-notation cleanup (process) stage.
+# qwen2.5:7b gives good results; smaller options: "qwen2.5:1.5b", "qwen2.5:3b"
 
 OLLAMA_MODEL: str = "qwen2.5:7b"
+
+# OLLAMA_RANK_MODEL: model used specifically for the ranking stage.
+# When empty (default), OLLAMA_MODEL is used for both ranking and cleanup.
+# Set to a different model if you want a separate (possibly larger) model for
+# ranking papers.  Example: "qwen2.5:14b"
+
+# OLLAMA_RANK_MODEL: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Paraphrase level (experimental)
+# ---------------------------------------------------------------------------
+# PARAPHRASE_LEVEL: controls how significantly the LLM rewrites each abstract.
+#
+#   1 (default) — math-notation cleanup only; original wording is preserved.
+#
+#   2 — light paraphrase: sentences are restructured to replace specific
+#       numerical values and technical equations with plain-language
+#       descriptions of what they represent or show.  All key claims and
+#       conclusions from the abstract are preserved.
+#
+#   3 — full digest: the abstract is distilled into a spoken summary that
+#       highlights the main research question, the data / simulations /
+#       techniques used, and the key findings.  A natural mix of the authors'
+#       words and the LLM's own words.
+#
+# In all levels the model is instructed never to introduce information or
+# claims not present in the original abstract.  A validation guard falls back
+# to the level-1 output whenever the LLM response looks unreliable.
+
+PARAPHRASE_LEVEL: int = 1
 
 
 # ---------------------------------------------------------------------------

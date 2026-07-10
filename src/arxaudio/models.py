@@ -32,6 +32,7 @@ class Paper:
     published: str = ""  # ISO 8601 timestamp from the arXiv feed
 
     keep: bool | None = None
+    relevance_score: float | None = None  # 0–10 assigned by the rank stage
     clean_title: str = ""
     clean_abstract: str = ""
 

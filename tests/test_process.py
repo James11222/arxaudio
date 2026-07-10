@@ -7,7 +7,13 @@ import pytest
 
 from arxaudio.llm.base import LLMError
 from arxaudio.models import Paper
-from arxaudio.process import apply_replacements, clean_paper, process_papers
+from arxaudio.process import (
+    apply_replacements,
+    clean_paper,
+    decode_latex_name,
+    paraphrase_abstract,
+    process_papers,
+)
 
 from conftest import FakeLLM
 
@@ -687,3 +693,152 @@ def test_process_papers_skip_keep_false():
     process_papers([paper], llm)
     assert paper.clean_title == ""
     assert paper.clean_abstract == ""
+
+
+# ---------------------------------------------------------------------------
+# 19. decode_latex_name
+# ---------------------------------------------------------------------------
+
+def test_decode_acute_accent():
+    assert decode_latex_name(r"S\'anchez") == "Sánchez"
+
+
+def test_decode_acute_braced():
+    assert decode_latex_name(r"{\'{a}}nchez") == "ánchez"
+
+
+def test_decode_cedilla():
+    assert decode_latex_name(r"\c{c}") == "ç"
+
+
+def test_decode_umlaut():
+    assert decode_latex_name(r'M\"uller') == "Müller"
+
+
+def test_decode_standalone_ss():
+    assert decode_latex_name(r"Gro\ss") == "Groß"
+
+
+def test_decode_no_latex():
+    """Plain names pass through unchanged."""
+    assert decode_latex_name("Smith") == "Smith"
+
+
+def test_decode_strips_leftover_braces():
+    """Braces from LaTeX grouping that do not form an accent command are dropped."""
+    assert "{" not in decode_latex_name(r"{\rm foo}")
+
+
+# ---------------------------------------------------------------------------
+# 20. paraphrase_abstract
+# ---------------------------------------------------------------------------
+
+_LONG_ABSTRACT = (
+    "We present a new weak-lensing analysis of the LSST Year-1 data, "
+    "measuring the matter power spectrum P of k at scales from 0.1 to 10 h per megaparsec. "
+    "Using a Markov chain Monte Carlo approach we derive sigma eight equals 0.82 plus or minus 0.03 "
+    "and omega matter equals 0.30 plus or minus 0.01, consistent with Planck 2018. "
+    "Systematic effects, including shape noise and intrinsic alignments, are marginalised over. "
+    "Our results place tight constraints on the clustering amplitude and matter density."
+)
+
+
+def test_paraphrase_level1_is_noop():
+    """Level 1 returns the text unchanged without calling the LLM."""
+    llm = FakeLLM(responses=["should not be called"])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=1, arxiv_id="test")
+    assert result == _LONG_ABSTRACT
+    assert llm.calls == []
+
+
+def test_paraphrase_level2_uses_llm():
+    """Level 2 calls the LLM and returns its output when it passes validation."""
+    paraphrase = (
+        "Using Year-1 LSST data the authors measure the matter power spectrum "
+        "and derive tight constraints on the clustering amplitude and matter density, "
+        "consistent with Planck 2018. Systematics including shape noise and intrinsic "
+        "alignments are marginalised over."
+    )
+    llm = FakeLLM(responses=[paraphrase])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=2, arxiv_id="test")
+    assert result == paraphrase
+    assert len(llm.calls) == 1
+
+
+def test_paraphrase_level3_uses_llm():
+    """Level 3 calls the LLM and returns a shorter digest."""
+    digest = (
+        "This paper measures the matter power spectrum with LSST weak lensing data. "
+        "Key results: tight constraints on clustering amplitude and matter density, "
+        "consistent with Planck. Systematics marginalised."
+    )
+    llm = FakeLLM(responses=[digest])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=3, arxiv_id="test")
+    assert result == digest
+
+
+def test_paraphrase_level2_empty_output_falls_back():
+    """Empty LLM output → original text returned."""
+    llm = FakeLLM(responses=[""])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=2)
+    assert result == _LONG_ABSTRACT
+
+
+def test_paraphrase_level2_too_short_falls_back():
+    """Output below minimum length ratio → original text returned."""
+    llm = FakeLLM(responses=["x"])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=2)
+    assert result == _LONG_ABSTRACT
+
+
+def test_paraphrase_level2_too_long_falls_back():
+    """Output more than twice the original → fallback."""
+    too_long = _LONG_ABSTRACT * 5
+    llm = FakeLLM(responses=[too_long])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=2)
+    assert result == _LONG_ABSTRACT
+
+
+def test_paraphrase_llm_error_falls_back():
+    """LLMError → original text returned."""
+    llm = FakeLLM(raise_mode=True)
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=2)
+    assert result == _LONG_ABSTRACT
+
+
+def test_paraphrase_chatter_prefix_falls_back():
+    """Chatty prefix (e.g. 'Here is...') → fallback."""
+    chatter = "Here is the rewritten abstract: " + _LONG_ABSTRACT
+    llm = FakeLLM(responses=[chatter])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=2)
+    assert result == _LONG_ABSTRACT
+
+
+def test_paraphrase_strips_lead_in_echo():
+    """'Rewritten:' echo prefix is stripped before validation."""
+    clean = (
+        "The LSST data yield tight constraints on clustering amplitude and matter density, "
+        "consistent with Planck 2018. Systematics are marginalised."
+    )
+    echoed = "Rewritten: " + clean
+    llm = FakeLLM(responses=[echoed])
+    result = paraphrase_abstract(_LONG_ABSTRACT, llm, level=3, arxiv_id="test")
+    assert result == clean
+
+
+def test_process_papers_paraphrase_level2(paper_co):
+    """process_papers with paraphrase_level=2 applies the paraphrase pass."""
+    clean_text = apply_replacements(paper_co.abstract)
+    # Produce a valid paraphrase: shorter but above min ratio, no latex markers.
+    paraphrase = "The LSST Year-1 data constrain cosmological parameters consistent with Planck."
+    # For level-2 LLM responses: title + abstract (polish) + abstract (paraphrase)
+    llm = FakeLLM(responses=[clean_text, clean_text, paraphrase])
+    process_papers([paper_co], llm, paraphrase_level=2)
+    assert paper_co.clean_abstract == paraphrase
+
+
+def test_process_papers_paraphrase_level1_no_extra_call(paper_co):
+    """process_papers with paraphrase_level=1 makes only the 2 polish calls."""
+    llm = FakeLLM(responses=["title out", "abstract out"])
+    process_papers([paper_co], llm, paraphrase_level=1)
+    assert len(llm.calls) == 2  # title + abstract only

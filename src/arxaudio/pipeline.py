@@ -77,7 +77,6 @@ _LLM_REGISTRY: dict[str, "callable[[Settings], LLMBackend]"] = {
     "ollama": lambda s: OllamaBackend(model=s.ollama_model),
 }
 
-
 def _make_notebooklm_backend(settings: "Settings") -> "DirectAudioBackend":
     """Lazy-import factory for the optional NotebookLM backend."""
     try:
@@ -133,6 +132,58 @@ def make_tts(settings: Settings) -> "TTSBackend | DirectAudioBackend":
 
 def _default_output() -> Path:
     return Path("output") / f"arxaudio_{date.today().isoformat()}.mp3"
+
+
+def _default_text_output() -> Path:
+    return Path("output") / f"arxaudio_{date.today().isoformat()}.txt"
+
+
+def _default_rank_output() -> Path:
+    return Path("output") / f"arxaudio_rank_{date.today().isoformat()}.txt"
+
+
+def _save_rank_file(
+    ranked: list[Paper],
+    kept: list[Paper],
+    extras: list[Paper],
+    path: Path,
+    system_prompt: str = "",
+    user_prompt: str = "",
+    raw_reply: str = "",
+) -> None:
+    kept_ids = {p.arxiv_id for p in kept}
+    extra_ids = {p.arxiv_id for p in extras}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        f.write(f"arxaudio rank log — {date.today().isoformat()}\n")
+        f.write(f"{len(ranked)} papers ranked, {len(kept)} audio, {len(extras)} email-only\n\n")
+        if system_prompt:
+            f.write("=== SYSTEM PROMPT ===\n")
+            f.write(system_prompt.strip())
+            f.write("\n\n")
+        if user_prompt:
+            f.write("=== USER PROMPT ===\n")
+            f.write(user_prompt.strip())
+            f.write("\n\n")
+        if raw_reply:
+            f.write("=== RAW REPLY ===\n")
+            f.write(raw_reply.strip())
+            f.write("\n\n")
+        f.write("=== RANKING ===\n")
+        for i, paper in enumerate(ranked, start=1):
+            if paper.arxiv_id in kept_ids:
+                label = "AUDIO"
+            elif paper.arxiv_id in extra_ids:
+                label = "EMAIL-ONLY"
+            else:
+                label = "UNSELECTED"
+            score = (
+                f"{paper.relevance_score:4.1f}/10"
+                if paper.relevance_score is not None
+                else "    ?/10"
+            )
+            f.write(f"{i:>3}. {score} [{label:<10}] {paper.arxiv_id}  {paper.title}\n")
+    logger.info("Rank log saved to %s", path)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -200,6 +251,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=(
             "Fetch + rank + process only; print what would be synthesized and "
             "the email-only extras, then exit. No TTS, no email."
+        ),
+    )
+    p.add_argument(
+        "--output-text",
+        metavar="PATH",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "Save the processed text transcript to a file. "
+            "Defaults to ./output/arxaudio_YYYY-MM-DD.txt when no path is given."
         ),
     )
     return p
@@ -293,6 +355,9 @@ def run(args: argparse.Namespace) -> int:
     preferences = _read_preferences(preferences_path)
 
     output_path = Path(args.output) if args.output else _default_output()
+    text_path: Path | None = None
+    if args.output_text is not None:
+        text_path = Path(args.output_text) if args.output_text else _default_text_output()
 
     benty_mode = settings.paper_source == "benty"
     notebooklm_mode = settings.tts_backend == "notebooklm"
@@ -329,7 +394,8 @@ def run(args: argparse.Namespace) -> int:
     logger.info("Fetched %d papers.", len(papers))
 
     # --- LLM backend + health check (fail fast) -------------------------
-    llm: LLMBackend | None = None
+    llm: LLMBackend | None = None       # math-cleanup (process stage)
+    llm_rank: LLMBackend | None = None  # relevance ranking
     if needs_llm:
         llm = make_llm(settings)
         ensure = getattr(llm, "ensure_model", None)
@@ -339,6 +405,19 @@ def run(args: argparse.Namespace) -> int:
             except LLMError as exc:
                 logger.error("LLM backend health check failed: %s", exc)
                 return 1
+
+        if settings.ollama_rank_model:
+            llm_rank = OllamaBackend(model=settings.ollama_rank_model)
+            logger.info("Rank model: %s (process model: %s)", settings.ollama_rank_model, settings.ollama_model)
+            ensure_rank = getattr(llm_rank, "ensure_model", None)
+            if callable(ensure_rank):
+                try:
+                    ensure_rank()
+                except LLMError as exc:
+                    logger.error("Rank LLM backend health check failed: %s", exc)
+                    return 1
+        else:
+            llm_rank = llm
 
     # --- Rank -----------------------------------------------------------
     # One LLM call orders all titles by relevance. We skip it (and use feed
@@ -350,6 +429,9 @@ def run(args: argparse.Namespace) -> int:
     # When MAX_PAPERS == 0 (unlimited) we still rank, so audio order reflects
     # relevance, unless --no-rank says otherwise.
     n = settings.max_papers
+    raw_rank_reply = ""
+    raw_rank_system = ""
+    raw_rank_prompt = ""
     if benty_mode:
         # benty already returned papers in its ML-ranked order; that order IS
         # the ranking, so the LLM rank step is skipped entirely (--no-rank is
@@ -363,11 +445,13 @@ def run(args: argparse.Namespace) -> int:
             reason = "--no-rank" if args.no_rank else f"fetched <= MAX_PAPERS={n}"
             logger.info("Ranking skipped (%s): using arrival order.", reason)
         else:
-            assert llm is not None
-            ranked = rank_stage.rank_papers(papers, llm, preferences)
+            assert llm_rank is not None
+            ranked, raw_rank_system, raw_rank_prompt, raw_rank_reply = rank_stage.rank_papers(papers, llm_rank, preferences)
 
     # --- Split into audio papers + email-only extras --------------------
     kept, extras = _split_ranked(ranked, n)
+
+    _save_rank_file(ranked, kept, extras, _default_rank_output(), raw_rank_system, raw_rank_prompt, raw_rank_reply)
 
     if not kept:
         logger.info("No papers to synthesize today.")
@@ -379,7 +463,7 @@ def run(args: argparse.Namespace) -> int:
     for paper in extras:
         logger.info("EMAIL-ONLY %s — %s", paper.arxiv_id, paper.title)
 
-    # --- Process (math cleanup) -----------------------------------------
+    # --- Process (math cleanup + optional paraphrase) -------------------
     # Skipped entirely when the notebookLM backend is active: NotebookLM
     # generates audio from the raw title/author/abstract text directly (it
     # handles scientific notation internally), so math cleanup adds no value.
@@ -393,7 +477,33 @@ def run(args: argparse.Namespace) -> int:
         _regex_only_clean(kept)
     else:
         assert llm is not None
-        process.process_papers(kept, llm)
+        if settings.paraphrase_level > 1:
+            logger.info("Paraphrase level %d active.", settings.paraphrase_level)
+        process.process_papers(kept, llm, paraphrase_level=settings.paraphrase_level)
+
+    # --- Text transcript ------------------------------------------------
+    if text_path is not None:
+        text_path.parent.mkdir(parents=True, exist_ok=True)
+        with text_path.open("w", encoding="utf-8") as f:
+            f.write(f"arxaudio digest — {date.today().isoformat()}\n")
+            f.write(f"{len(kept)} audio papers, {len(extras)} email-only\n\n")
+            for i, paper in enumerate(kept, start=1):
+                byline = paper.first_author + (
+                    " et al" if len(paper.authors) > 1 else ""
+                )
+                abstract = paper.clean_abstract or paper.abstract
+                f.write(f"[{i}/{len(kept)}] {paper.arxiv_id}\n")
+                f.write(f"TITLE:    {paper.clean_title or paper.title}\n")
+                f.write(f"AUTHOR:   {byline}\n")
+                f.write(f"ABSTRACT: {abstract}\n\n")
+            if extras:
+                f.write(f"Email-only ({len(extras)} papers):\n")
+                for i, paper in enumerate(extras, start=1):
+                    byline = paper.first_author + (
+                        " et al" if len(paper.authors) > 1 else ""
+                    )
+                    f.write(f"  {i}. {paper.title} — {byline} — {paper.url}\n")
+        logger.info("Text transcript saved to %s", text_path)
 
     # --- Dry run stops here ---------------------------------------------
     if args.dry_run:

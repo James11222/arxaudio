@@ -34,6 +34,9 @@ _DEFAULTS: dict[str, object] = {
     "BENTY_BASE_URL": "https://www.benty-fields.com",
     "LLM_BACKEND": "ollama",
     "OLLAMA_MODEL": "qwen2.5:0.5b",
+    "OLLAMA_RANK_MODEL": "",
+    "OLLAMA_TIMEOUT": 120.0,
+    "OLLAMA_NUM_CTX": 8192,
     "TTS_BACKEND": "edge",
     "TTS_VOICE": "en-US-AndrewNeural",
     "TTS_SPEED": 1.0,
@@ -56,6 +59,7 @@ _DEFAULTS: dict[str, object] = {
     ),
     "NOTEBOOKLM_DELETE_NOTEBOOK": True,
     "NOTEBOOKLM_TIMEOUT": 600,
+    "PARAPHRASE_LEVEL": 1,
 }
 
 
@@ -71,7 +75,10 @@ class Settings:
 
     # LLM
     llm_backend: str = "ollama"
-    ollama_model: str = "qwen2.5:0.5b"
+    ollama_model: str = "qwen2.5:0.5b"       # used for math-cleanup (process stage)
+    ollama_rank_model: str = ""               # used for ranking; falls back to ollama_model if empty
+    ollama_timeout: float = 120.0             # per-request timeout in seconds
+    ollama_num_ctx: int = 8192               # KV-cache context window in tokens
 
     # TTS
     tts_backend: str = "edge"
@@ -107,6 +114,12 @@ class Settings:
     notebooklm_delete_notebook: bool = True
     notebooklm_timeout: int = 600
     notebooklm_auth_json: str = ""  # from NOTEBOOKLM_AUTH_JSON env var
+
+    # Paraphrase level — controls how much the LLM rewrites the abstract
+    # 1 = math-notation cleanup only (original wording preserved)
+    # 2 = light paraphrase: technical equations/numbers summarised in plain language
+    # 3 = full digest: key takeaways, methods, and main questions highlighted
+    paraphrase_level: int = 1
 
     # -----------------------------------------------------------------------
     # Derived helpers
@@ -253,6 +266,11 @@ def _validate(settings: Settings, config_path: Path) -> None:
             f"NOTEBOOKLM_AUDIO_LENGTH must be one of {sorted(valid_notebooklm_lengths)} "
             f"(got {settings.notebooklm_audio_length!r})."
         )
+    if settings.paraphrase_level not in {1, 2, 3}:
+        raise ValueError(
+            f"PARAPHRASE_LEVEL must be 1, 2, or 3 (got {settings.paraphrase_level!r}). "
+            "1 = math cleanup only, 2 = light paraphrase, 3 = full digest."
+        )
 
 
 def load_settings(config_path: str | Path | None = None) -> Settings:
@@ -295,6 +313,9 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         categories=list(get("CATEGORIES")),           # type: ignore[arg-type]
         llm_backend=str(get("LLM_BACKEND")),
         ollama_model=str(get("OLLAMA_MODEL")),
+        ollama_rank_model=str(get("OLLAMA_RANK_MODEL")),
+        ollama_timeout=float(get("OLLAMA_TIMEOUT")),  # type: ignore[arg-type]
+        ollama_num_ctx=int(get("OLLAMA_NUM_CTX")),    # type: ignore[arg-type]
         tts_backend=str(get("TTS_BACKEND")),
         tts_voice=str(get("TTS_VOICE")),
         tts_speed=float(get("TTS_SPEED")),          # type: ignore[arg-type]
@@ -321,6 +342,8 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         notebooklm_delete_notebook=bool(get("NOTEBOOKLM_DELETE_NOTEBOOK")),
         notebooklm_timeout=int(get("NOTEBOOKLM_TIMEOUT")),  # type: ignore[arg-type]
         notebooklm_auth_json=os.environ.get("NOTEBOOKLM_AUTH_JSON", ""),
+        # Paraphrase level
+        paraphrase_level=int(get("PARAPHRASE_LEVEL")),  # type: ignore[arg-type]
     )
 
     _validate(settings, resolved)
@@ -339,10 +362,13 @@ def load_settings(config_path: str | Path | None = None) -> Settings:
         )
 
     logger.info("Paper source: %s", settings.paper_source)
+    rank_model = settings.ollama_rank_model or settings.ollama_model
     logger.info(
-        "Settings loaded: %d categories, model=%s, voice=%s",
+        "Settings loaded: %d categories, model=%s, rank_model=%s, voice=%s, paraphrase_level=%d",
         len(settings.categories),
         settings.ollama_model,
+        rank_model,
         settings.tts_voice,
+        settings.paraphrase_level,
     )
     return settings
