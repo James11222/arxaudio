@@ -255,3 +255,38 @@ def test_smtp_port_custom(tmp_path, monkeypatch):
     cfg = _write_config(tmp_path, MINIMAL_CONFIG)
     settings = load_settings(cfg)
     assert settings.smtp_port == 465
+
+
+# ---------------------------------------------------------------------------
+# PARAPHRASE_LEVEL validation
+# ---------------------------------------------------------------------------
+
+def test_paraphrase_level_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    cfg = _write_config(tmp_path, MINIMAL_CONFIG)
+    settings = load_settings(cfg)
+    assert settings.paraphrase_level == 1
+
+
+def test_paraphrase_level_valid_values(tmp_path, monkeypatch):
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    for level in (1, 2, 3):
+        subdir = tmp_path / str(level)
+        subdir.mkdir()
+        cfg = _write_config(subdir, f"CATEGORIES = ['astro-ph.CO']\nPARAPHRASE_LEVEL = {level}\n")
+        settings = load_settings(cfg)
+        assert settings.paraphrase_level == level
+
+
+def test_paraphrase_level_invalid_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    cfg = _write_config(tmp_path, "CATEGORIES = ['astro-ph.CO']\nPARAPHRASE_LEVEL = 4\n")
+    with pytest.raises(ValueError, match="PARAPHRASE_LEVEL"):
+        load_settings(cfg)
+
+
+def test_paraphrase_level_zero_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    cfg = _write_config(tmp_path, "CATEGORIES = ['astro-ph.CO']\nPARAPHRASE_LEVEL = 0\n")
+    with pytest.raises(ValueError, match="PARAPHRASE_LEVEL"):
+        load_settings(cfg)

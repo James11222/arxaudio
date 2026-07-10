@@ -11,6 +11,16 @@ Two layers, deterministic-first:
    paraphrase. A safety valve discards the LLM output if it looks like the tiny
    model misbehaved (wrong length, empty, or chattered), keeping the regex-only
    version so audio is always sane.
+3. **Optional paraphrase pass** (levels 2–3) controlled by ``PARAPHRASE_LEVEL``:
+   - Level 1: no paraphrasing; math cleanup only (default).
+   - Level 2: light paraphrase — sentences restructured to replace specific
+     numerical values and equations with plain-language summaries while keeping
+     all key claims intact.
+   - Level 3: full digest — abstract distilled into key takeaways including the
+     research question, data/methods used, and main conclusions.
+   In all levels the model is instructed never to introduce false claims or
+   contradict the original abstract. An additional verification guard ensures
+   the output is not empty and does not exceed reasonable length bounds.
 
 The replacement table lives entirely in ``math_replacements.md`` so users extend
 it by editing markdown — see that file's header for the column contract.
@@ -34,9 +44,83 @@ logger = logging.getLogger(__name__)
 # src/arxaudio/process.py -> repo root).
 _DEFAULT_TABLE_PATH = Path(__file__).resolve().parents[2] / "math_replacements.md"
 
+# ---------------------------------------------------------------------------
+# LaTeX accent decoder for author names (Shrihan)
+# ---------------------------------------------------------------------------
+
+_LATEX_ACCENT_MAP: dict[str, dict[str, str]] = {
+    "'": {"a": "á", "e": "é", "i": "í", "o": "ó", "u": "ú", "y": "ý",
+          "A": "Á", "E": "É", "I": "Í", "O": "Ó", "U": "Ú", "Y": "Ý",
+          "c": "ć", "n": "ń", "s": "ś", "z": "ź",
+          "C": "Ć", "N": "Ń", "S": "Ś", "Z": "Ź"},
+    "`": {"a": "à", "e": "è", "i": "ì", "o": "ò", "u": "ù",
+          "A": "À", "E": "È", "I": "Ì", "O": "Ò", "U": "Ù"},
+    '"': {"a": "ä", "e": "ë", "i": "ï", "o": "ö", "u": "ü", "y": "ÿ",
+          "A": "Ä", "E": "Ë", "I": "Ï", "O": "Ö", "U": "Ü"},
+    "^": {"a": "â", "e": "ê", "i": "î", "o": "ô", "u": "û",
+          "A": "Â", "E": "Ê", "I": "Î", "O": "Ô", "U": "Û"},
+    "~": {"a": "ã", "n": "ñ", "o": "õ", "A": "Ã", "N": "Ñ", "O": "Õ"},
+    "c": {"c": "ç", "C": "Ç", "s": "ş", "S": "Ş"},
+    "v": {"c": "č", "s": "š", "z": "ž", "r": "ř", "n": "ň",
+          "C": "Č", "S": "Š", "Z": "Ž", "R": "Ř", "N": "Ň"},
+    "r": {"a": "å", "A": "Å"},
+    ".": {"z": "ż", "Z": "Ż"},
+    "=": {"a": "ā", "e": "ē", "i": "ī", "o": "ō", "u": "ū",
+          "A": "Ā", "E": "Ē", "I": "Ī", "O": "Ō", "U": "Ū"},
+    "u": {"a": "ă", "A": "Ă"},
+    "H": {"o": "ő", "u": "ű", "O": "Ő", "U": "Ű"},
+    "k": {"a": "ą", "e": "ę", "A": "Ą", "E": "Ę"},
+}
+
+_LATEX_STANDALONE: dict[str, str] = {
+    r"\ss": "ß", r"\ae": "æ", r"\AE": "Æ", r"\oe": "œ", r"\OE": "Œ",
+    r"\aa": "å", r"\AA": "Å", r"\o": "ø", r"\O": "Ø",
+    r"\l": "ł", r"\L": "Ł", r"\i": "ı", r"\j": "ȷ",
+}
+
+# Accent command characters (single-char punctuation and single-letter commands).
+_ACCENT_CMD_CHARS = r"""'`"^~=.rvuHkc"""
+
+# Matches all braced/unbraced forms: {\' a}, {\'a}, \'{a}, \'a, {\c{c}}, \c{c}, \ca
+_ACCENT_RE = re.compile(
+    r'\{?\\([' + re.escape(_ACCENT_CMD_CHARS) + r'])\s*\{([a-zA-Z])\}\}?'  # \cmd{L} or {\cmd{L}}
+    r'|'
+    r'\{\\([' + re.escape(_ACCENT_CMD_CHARS) + r'])\s*([a-zA-Z])\}'         # {\cmd L}
+    r'|'
+    r'\\([' + re.escape(_ACCENT_CMD_CHARS) + r'])([a-zA-Z])'                # \cmdL (bare)
+)
+
+
+def _accent_sub(m: re.Match[str]) -> str:
+    # Three alternation groups; pick whichever matched.
+    cmd = m.group(1) or m.group(3) or m.group(5)
+    letter = m.group(2) or m.group(4) or m.group(6)
+    return _LATEX_ACCENT_MAP.get(cmd, {}).get(letter, letter)
+
+
+def decode_latex_name(name: str) -> str:
+    """Decode LaTeX accent commands in an author name to Unicode.
+
+    Handles common forms: S\\'anchez, {\\'a}, \\'{a}, \\c{c}, etc.
+    """
+    # Standalone symbol commands first (order matters: \aa before \a).
+    for cmd, replacement in _LATEX_STANDALONE.items():
+        name = name.replace(cmd, replacement)
+    name = _ACCENT_RE.sub(_accent_sub, name)
+    # Strip any remaining braces left over from LaTeX grouping.
+    name = name.replace("{", "").replace("}", "")
+    return name
+
+
+# ---------------------------------------------------------------------------
+# LLM clean pass constants
+# ---------------------------------------------------------------------------
+
 # How far the LLM output may differ from the regex-pass length before we reject
-# it as paraphrasing/chatter. 0.20 == 20%.
-_LENGTH_TOLERANCE = 0.20
+# it as paraphrasing/chatter. 0.12 == 12% (~180 chars on a 1500-char abstract).
+# Tightened from 0.20 to 0.12 because the original 20% window was wide enough
+# for small models to silently reword sentences while still passing the check.
+_LENGTH_TOLERANCE = 0.12
 
 # A correct spoken-text polish contains NO math delimiters — the deterministic
 # pass already stripped every ``$``, brace, and hard-to-pronounce command. A
@@ -445,18 +529,180 @@ def clean_paper(paper: Paper, llm: LLMBackend) -> None:
     logger.info("process: cleaned %s", paper.arxiv_id)
 
 
-def process_papers(papers: list[Paper], llm: LLMBackend) -> None:
+# ---------------------------------------------------------------------------
+# Paraphrase pass (levels 2 and 3)
+# ---------------------------------------------------------------------------
+
+# System prompt for level 2 (light paraphrase).
+# Sentences are restructured to replace specific numerical values and equations
+# with plain-language descriptions, but the structure, all key claims, and
+# results of the abstract are preserved verbatim in spirit.
+_PARAPHRASE_L2_SYSTEM = """\
+You are a scientific writer who rewrites astrophysics paper abstracts for audio
+playback by expert listeners.
+
+TASK: Lightly rephrase the abstract so it flows naturally when spoken aloud.
+Replace or remove specific numerical values, mathematical quantities, and
+technical equations with concise plain-language descriptions of what they
+represent or what they show. Keep the same overall sentence structure and
+every factual claim.
+
+RULES — follow exactly:
+- Do NOT add any information, results, or claims that are not explicitly stated
+  in the original abstract.
+- Do NOT contradict, omit, or change the meaning of any statement.
+- Do NOT paraphrase to the point of losing scientific specificity; keep field
+  terminology and instrument/survey names.
+- Replace specific numbers and equations only when doing so makes the text
+  clearer to an audio listener. E.g. "sigma_8 = 0.82 ± 0.03" can become
+  "a tight constraint on the clustering amplitude".
+- Output ONLY the rewritten abstract, nothing else.
+- If in doubt, keep the original wording."""
+
+# System prompt for level 3 (full digest).
+# The abstract is digested into key takeaways, highlighting the research
+# question, methods/data used, and main findings.
+_PARAPHRASE_L3_SYSTEM = """\
+You are a scientific communicator writing a spoken digest of an astrophysics
+paper abstract for expert listeners (postdocs and senior PhD students).
+
+TASK: Distil the abstract into a concise spoken summary that highlights:
+1. The main research question or goal.
+2. The data, simulations, or techniques used.
+3. The key findings and conclusions.
+
+RULES — follow exactly:
+- Use a natural mix of your own words and the authors' words.
+- Do NOT add any information, results, or claims that are not explicitly stated
+  in the original abstract.
+- Do NOT contradict, misrepresent, or omit any core finding or conclusion from
+  the abstract.
+- Be faithful to the science: if the abstract expresses uncertainty, hedging,
+  or a specific direction, preserve that.
+- Keep field-specific terminology and proper names (telescopes, surveys,
+  simulations, etc.) as-is.
+- Output ONLY the spoken summary, nothing else. Aim for 3–6 sentences."""
+
+# Guard: paraphrase output must be at least this fraction of the original
+# to avoid catastrophic truncation.
+_PARAPHRASE_MIN_LENGTH_RATIO = 0.20
+
+# Guard: level 2 output must not be more than twice the original length.
+# Level 3 can be somewhat shorter (summary), but not longer than the original.
+_PARAPHRASE_L2_MAX_RATIO = 2.0
+_PARAPHRASE_L3_MAX_RATIO = 1.5
+
+
+def _validate_paraphrase(candidate: str, original: str, level: int) -> bool:
+    """Return True if the paraphrase output looks plausible.
+
+    Guards against empty output, gross length mismatch (a sign of hallucination
+    or truncation), and chatter prefixes.
+    """
+    candidate = candidate.strip()
+    if not candidate:
+        return False
+    if _looks_like_chatter(candidate):
+        return False
+    orig_len = max(len(original), 1)
+    ratio = len(candidate) / orig_len
+    if ratio < _PARAPHRASE_MIN_LENGTH_RATIO:
+        return False
+    if level == 2 and ratio > _PARAPHRASE_L2_MAX_RATIO:
+        return False
+    if level == 3 and ratio > _PARAPHRASE_L3_MAX_RATIO:
+        return False
+    return True
+
+
+def paraphrase_abstract(
+    text: str,
+    llm: LLMBackend,
+    level: int,
+    *,
+    arxiv_id: str = "unknown",
+) -> str:
+    """Paraphrase ``text`` at the given ``level`` (2 or 3).
+
+    Level 1 is a no-op (returns ``text`` unchanged). Levels 2 and 3 make one
+    LLM call each with a faithful-rewrite system prompt. Falls back to the
+    input ``text`` on any LLM error or if the output fails validation (empty,
+    too short/long, chatty prefix).
+
+    Args:
+        text: The already-cleaned abstract (output of the regex + polish pass).
+        llm: Stateless LLM backend.
+        level: 1 = no-op, 2 = light paraphrase, 3 = full digest.
+        arxiv_id: Used only in log messages.
+
+    Returns:
+        Rewritten text, or the original ``text`` on failure.
+    """
+    if level == 1 or not text.strip():
+        return text
+
+    if level == 2:
+        system = _PARAPHRASE_L2_SYSTEM
+    else:
+        system = _PARAPHRASE_L3_SYSTEM
+
+    try:
+        candidate = llm.complete(system, f"Abstract:\n{text}\n\nRewritten:")
+    except LLMError as exc:
+        logger.warning(
+            "process: LLM error paraphrasing %s (level %d), keeping cleaned version: %s",
+            arxiv_id, level, exc,
+        )
+        return text
+
+    # Strip common lead-in echoes from the model.
+    stripped = candidate.strip()
+    for prefix in ("rewritten:", "abstract:", "summary:", "output:"):
+        if stripped.lower().startswith(prefix):
+            stripped = stripped[len(prefix):].strip()
+            break
+
+    if _validate_paraphrase(stripped, text, level):
+        logger.info(
+            "process: paraphrased %s at level %d (%.0f%% of original length)",
+            arxiv_id, level, 100 * len(stripped) / max(len(text), 1),
+        )
+        return stripped
+
+    logger.warning(
+        "process: paraphrase output for %s (level %d) failed validation "
+        "(len %d vs original %d), keeping cleaned version",
+        arxiv_id, level, len(stripped), len(text),
+    )
+    return text
+
+
+def process_papers(papers: list[Paper], llm: LLMBackend, paraphrase_level: int = 1) -> None:
     """Clean every kept paper, isolating failures per paper.
 
     Only papers with ``keep`` truthy are processed. A failure on one paper is
     logged and the regex-only fallback is applied so the pipeline still produces
     sane audio for it; one bad paper never aborts the run.
+
+    Args:
+        papers: list of Paper objects; only those with ``keep=True`` are processed.
+        llm: LLM backend used for both the math-cleanup polish and the optional
+             paraphrase pass.
+        paraphrase_level: 1 = math cleanup only (default), 2 = light paraphrase,
+            3 = full digest.
     """
     for paper in papers:
         if not paper.keep:
             continue
         try:
             clean_paper(paper, llm)
+            if paraphrase_level > 1:
+                paper.clean_abstract = paraphrase_abstract(
+                    paper.clean_abstract,
+                    llm,
+                    paraphrase_level,
+                    arxiv_id=paper.arxiv_id,
+                )
         except Exception as exc:  # noqa: BLE001 - last-resort per-paper guard
             logger.warning(
                 "process: unexpected error cleaning %s, using regex-only: %s",
