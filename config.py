@@ -102,7 +102,7 @@ OLLAMA_RANK_MODEL = ""
 # claims not present in the original abstract.  A validation guard falls back
 # to the level-1 output whenever the LLM response looks unreliable.
 
-PARAPHRASE_LEVEL: int = 2
+PARAPHRASE_LEVEL: int = 3
 
 
 # ---------------------------------------------------------------------------
