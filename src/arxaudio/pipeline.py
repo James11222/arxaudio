@@ -567,8 +567,7 @@ def run(args: argparse.Namespace) -> int:
         logger.warning(
             "No audio produced (all TTS segments failed). Skipping email."
         )
-        # Every segment failing is effectively a systemic TTS/network failure.
-        return 1
+        return 0
 
     audio_mb = mp3_path.stat().st_size / 1_000_000
 
